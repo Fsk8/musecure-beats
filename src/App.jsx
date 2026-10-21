@@ -1,0 +1,217 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AudioEngine, loopSeconds } from './audio/engine';
+import { playhead } from './audio/playhead';
+import { KITS, ROOTS, SCALES, TRACKS, VEL, computeTheory } from './music/theory';
+import {
+  challengeDone, emptyGrid, extendPattern, fileSafeName, nextCell, parseProjectFile, projectFile,
+  quantizeTrack, randomTrack,
+} from './music/patterns';
+import { audioBufferToWav, downloadBlob } from './io/files';
+import { useBeatState } from './state/useBeatState';
+import { Transport, ConfirmRandomAll } from './components/Transport';
+import { SoundPanel } from './components/SoundPanel';
+import { Mixer } from './components/Mixer';
+import { TrackEditor } from './components/TrackEditor';
+import { Challenge } from './components/Challenge';
+import { SavePanel } from './components/SavePanel';
+
+export default function App() {
+  const [S, mutate, replaceState] = useBeatState();
+  const octKey = S.oct.join(',');
+  const theory = useMemo(() => computeTheory(S.root, S.scale, S.oct), [S.root, S.scale, octKey]);
+
+  const [playing, setPlaying] = useState(false);
+  const [follow, setFollow] = useState(true);
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [qGrid, setQGrid] = useState(2);
+  const [undoBuf, setUndoBuf] = useState(null);
+  const [qMessage, setQMessage] = useState('');
+  const [recording, setRecording] = useState(false);
+  const [recProgress, setRecProgress] = useState(0);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [wavLoops, setWavLoops] = useState(4);
+
+  // El motor lee siempre la versión más reciente del estado a través de refs.
+  const stateRef = useRef(S);
+  const theoryRef = useRef(theory);
+  stateRef.current = S;
+  theoryRef.current = theory;
+
+  const engineRef = useRef(null);
+  if (!engineRef.current) {
+    engineRef.current = new AudioEngine({
+      getState: () => stateRef.current,
+      getTheory: () => theoryRef.current,
+      onStep: playhead.set,
+    });
+  }
+  const engine = engineRef.current;
+
+  useEffect(() => {
+    engine.sync(S);
+  }, [S, engine]);
+
+  // Si el largo baja, la página actual puede quedar fuera.
+  useEffect(() => {
+    if (S.page >= S.len / 16) mutate((d) => { d.page = 0; });
+  }, [S.len, S.page, mutate]);
+
+  async function togglePlay() {
+    await engine.init();
+    if (engine.playing) {
+      engine.stop();
+      setPlaying(false);
+    } else {
+      engine.start();
+      setPlaying(true);
+    }
+  }
+
+  function handleCell(r, c) {
+    const t = S.tab;
+    const [g, p] = nextCell(S.emode, S.g[t][r][c], S.p[t][r][c]);
+    mutate((d) => { d.g[t][r][c] = g; d.p[t][r][c] = p; });
+    if (g) engine.preview(t, r, VEL[g]);
+  }
+
+  function handleLenChange(newLen) {
+    mutate((d) => {
+      extendPattern(d, d.len, newLen);
+      d.len = newLen;
+    });
+  }
+
+  function randomizeCurrent() {
+    const { g, p } = randomTrack(S.tab, S.len, theory);
+    mutate((d) => { d.g[d.tab] = g; d.p[d.tab] = p; });
+  }
+
+  function randomizeAll() {
+    const fresh = TRACKS.map((_, t) => randomTrack(t, S.len, theory));
+    mutate((d) => {
+      fresh.forEach(({ g, p }, t) => { d.g[t] = g; d.p[t] = p; });
+    });
+    setConfirmAll(false);
+  }
+
+  function clearTrack() {
+    mutate((d) => {
+      d.g[d.tab] = emptyGrid(TRACKS[d.tab].rows);
+      d.p[d.tab] = emptyGrid(TRACKS[d.tab].rows, 100);
+    });
+  }
+
+  function quantize() {
+    const t = S.tab;
+    setUndoBuf({ t, g: structuredClone(S.g[t]), p: structuredClone(S.p[t]) });
+    const { g, p, moved } = quantizeTrack(S.g[t], S.p[t], qGrid, S.len);
+    mutate((d) => { d.g[t] = g; d.p[t] = p; });
+    setQMessage(moved ? `${moved} nota${moved > 1 ? 's' : ''} alineada${moved > 1 ? 's' : ''}` : 'Ya estaba alineada');
+  }
+
+  function undoQuantize() {
+    if (!undoBuf) return;
+    mutate((d) => { d.g[undoBuf.t] = undoBuf.g; d.p[undoBuf.t] = undoBuf.p; });
+    setUndoBuf(null);
+    setQMessage('Deshecho');
+  }
+
+  function saveProject() {
+    const blob = new Blob([projectFile(S)], { type: 'application/json' });
+    downloadBlob(blob, `${fileSafeName(S.title)}.musecure.json`);
+    setSaveMessage(`Proyecto guardado: ${fileSafeName(S.title)}.musecure.json (revisa tu carpeta de descargas).`);
+  }
+
+  async function openProject(file) {
+    try {
+      const loaded = parseProjectFile(await file.text());
+      if (engine.playing) { engine.stop(); setPlaying(false); }
+      setUndoBuf(null);
+      replaceState({ ...loaded, tab: S.tab, page: 0, emode: S.emode });
+      setSaveMessage(`Abierto: ${loaded.title}`);
+    } catch (err) {
+      setSaveMessage(err.message);
+    }
+  }
+
+  async function exportWav() {
+    setRecording(true);
+    setRecProgress(0);
+    setPlaying(false);
+    setSaveMessage('');
+    try {
+      const buffer = await engine.recordLoop(wavLoops, setRecProgress);
+      if (!buffer) { setSaveMessage('Grabación cancelada.'); return; }
+      downloadBlob(audioBufferToWav(buffer), `${fileSafeName(S.title)}.wav`);
+      setSaveMessage(`WAV listo: ${fileSafeName(S.title)}.wav (${buffer.duration.toFixed(1)} s).`);
+    } catch (err) {
+      setSaveMessage(`No se pudo grabar el WAV: ${err.message}. Prueba en Chrome o Firefox actualizados.`);
+    } finally {
+      setRecording(false);
+    }
+  }
+
+  const subtitle = `${KITS[S.kit].name} · ${ROOTS[S.root][1]} ${SCALES[S.scale][0].toLowerCase()} · ${S.len} pasos`;
+
+  return (
+    <div className="wrap">
+      <header>
+        <h1>MuSecure <span>Beats</span></h1>
+        <div className="sub"><strong>{S.title || 'Sin nombre'}</strong> · {subtitle}</div>
+      </header>
+
+      <Transport
+        S={S}
+        mutate={mutate}
+        playing={playing}
+        onTogglePlay={togglePlay}
+        onLenChange={handleLenChange}
+        onRandomTrack={randomizeCurrent}
+        onAskRandomAll={() => setConfirmAll(true)}
+        onClearTrack={clearTrack}
+      >
+        {confirmAll && <ConfirmRandomAll onYes={randomizeAll} onNo={() => setConfirmAll(false)} />}
+      </Transport>
+
+      <SavePanel
+        title={S.title}
+        onTitle={(v) => mutate((d) => { d.title = v; })}
+        onSaveProject={saveProject}
+        onOpenProject={openProject}
+        loops={wavLoops}
+        onLoops={setWavLoops}
+        loopSec={loopSeconds(S)}
+        onExportWav={exportWav}
+        onCancel={() => engine.cancelRecording()}
+        recording={recording}
+        progress={recProgress}
+        message={saveMessage}
+      />
+
+      <SoundPanel S={S} mutate={mutate} />
+      <Mixer S={S} mutate={mutate} />
+
+      <TrackEditor
+        S={S}
+        mutate={mutate}
+        theory={theory}
+        follow={follow}
+        setFollow={setFollow}
+        onCell={handleCell}
+        qGrid={qGrid}
+        setQGrid={setQGrid}
+        onQuantize={quantize}
+        canUndo={Boolean(undoBuf)}
+        onUndo={undoQuantize}
+        qMessage={qMessage}
+      />
+
+      <Challenge done={challengeDone(S)} />
+
+      <p className="note">
+        Prototipo. Todos los sonidos son sintetizados, también el kit andino (una aproximación).
+        Tu beat se guarda automáticamente solo en este navegador: usa "Guardar proyecto" para tener una copia.
+      </p>
+    </div>
+  );
+}
