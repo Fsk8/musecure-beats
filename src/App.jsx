@@ -14,6 +14,9 @@ import { Mixer } from './components/Mixer';
 import { TrackEditor } from './components/TrackEditor';
 import { Challenge } from './components/Challenge';
 import { SavePanel } from './components/SavePanel';
+import { AccountBar } from './components/AccountBar';
+import { Gallery } from './components/Gallery';
+import { RegisterPanel } from './components/RegisterPanel';
 
 export default function App() {
   const [S, mutate, replaceState] = useBeatState();
@@ -30,6 +33,8 @@ export default function App() {
   const [recProgress, setRecProgress] = useState(0);
   const [saveMessage, setSaveMessage] = useState('');
   const [wavLoops, setWavLoops] = useState(4);
+  // Preferencia del equipo, no del beat: por eso no va en el proyecto.
+  const [lite, setLite] = useState(() => { try { return localStorage.getItem('msb-lite') === '1'; } catch { return false; } });
 
   // El motor lee siempre la versión más reciente del estado a través de refs.
   const stateRef = useRef(S);
@@ -50,6 +55,11 @@ export default function App() {
   useEffect(() => {
     engine.sync(S);
   }, [S, engine]);
+
+  useEffect(() => {
+    engine.setLite(lite);
+    try { localStorage.setItem('msb-lite', lite ? '1' : '0'); } catch { /* sin almacenamiento */ }
+  }, [lite, engine]);
 
   // Si el largo baja, la página actual puede quedar fuera.
   useEffect(() => {
@@ -140,7 +150,7 @@ export default function App() {
     setPlaying(false);
     setSaveMessage('');
     try {
-      const buffer = await engine.recordLoop(wavLoops, setRecProgress);
+      const buffer = await engine.renderOffline(wavLoops, setRecProgress);
       if (!buffer) { setSaveMessage('Grabación cancelada.'); return; }
       downloadBlob(audioBufferToWav(buffer), `${fileSafeName(S.title)}.wav`);
       setSaveMessage(`WAV listo: ${fileSafeName(S.title)}.wav (${buffer.duration.toFixed(1)} s).`);
@@ -151,13 +161,33 @@ export default function App() {
     }
   }
 
+  /** Archivos para registrar: una vuelta en WAV y el proyecto en JSON. */
+  async function buildRegisterFiles() {
+    if (engine.playing) { engine.stop(); setPlaying(false); }
+    setRecording(true);
+    try {
+      const buffer = await engine.renderOffline(1, setRecProgress);
+      if (!buffer) throw new Error('Grabación cancelada');
+      return {
+        wav: audioBufferToWav(buffer),
+        project: new Blob([projectFile(S)], { type: 'application/json' }),
+        baseName: fileSafeName(S.title),
+      };
+    } finally {
+      setRecording(false);
+    }
+  }
+
   const subtitle = `${KITS[S.kit].name} · ${ROOTS[S.root][1]} ${SCALES[S.scale][0].toLowerCase()} · ${S.len} pasos`;
 
   return (
     <div className="wrap">
       <header>
-        <h1>MuSecure <span>Beats</span></h1>
-        <div className="sub"><strong>{S.title || 'Sin nombre'}</strong> · {subtitle}</div>
+        <div className="brand">
+          <h1>MuSecure <span>Beats</span></h1>
+          <div className="sub"><strong>{S.title || 'Sin nombre'}</strong> · {subtitle}</div>
+        </div>
+        <AccountBar />
       </header>
 
       <Transport
@@ -169,6 +199,8 @@ export default function App() {
         onRandomTrack={randomizeCurrent}
         onAskRandomAll={() => setConfirmAll(true)}
         onClearTrack={clearTrack}
+        lite={lite}
+        onLiteChange={setLite}
       >
         {confirmAll && <ConfirmRandomAll onYes={randomizeAll} onNo={() => setConfirmAll(false)} />}
       </Transport>
@@ -187,6 +219,8 @@ export default function App() {
         progress={recProgress}
         message={saveMessage}
       />
+
+      <RegisterPanel title={S.title} buildFiles={buildRegisterFiles} />
 
       <SoundPanel S={S} mutate={mutate} />
       <Mixer S={S} mutate={mutate} />
@@ -207,6 +241,8 @@ export default function App() {
       />
 
       <Challenge done={challengeDone(S)} />
+
+      <Gallery />
 
       <p className="note">
         Prototipo. Todos los sonidos son sintetizados, también el kit andino (una aproximación).

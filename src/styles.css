@@ -99,3 +99,30 @@ button.primary-soft{border-color:var(--t1);color:var(--t1);font-weight:600}
 .panel-summary{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;margin-left:auto}
 .panel-body{display:grid;gap:12px;min-width:0}
 [hidden]{display:none!important}
+
+/* Cuenta y galería */
+header .brand{display:grid;gap:4px;min-width:0}
+.account{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end;font-size:13px}
+.muted{color:var(--muted)}
+.chip{font-size:12px;padding:5px 10px;border-radius:999px;font-variant-numeric:tabular-nums}
+.pill{font-size:12px;padding:5px 10px;border-radius:999px;background:var(--cell);color:var(--muted);border:1px solid var(--line)}
+.pill.ok{background:color-mix(in srgb,var(--t1) 15%,var(--panel));color:var(--ink);border-color:var(--t1)}
+.pill.warn{background:color-mix(in srgb,var(--play) 18%,var(--panel));color:var(--ink);border-color:var(--play)}
+.beat-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.beat-card{border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;gap:6px;min-width:0}
+.beat-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.beat-top strong{font-family:var(--display);font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.beat-meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--muted)}
+a.hint{color:var(--muted)}
+
+/* Registro */
+.credit-rows{display:grid;gap:6px}
+.credit-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.credit-row .text{flex:1 1 180px}
+input.text.pct{width:90px;flex:0 0 auto}
+.track-credits{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;border-radius:0}
+.seg button[aria-checked="true"]{background:var(--ink);color:var(--bg);font-weight:600}
+.warn-text{color:var(--t0)}
+.success{display:grid;gap:4px;border:1px solid var(--t1);border-radius:10px;padding:12px;background:color-mix(in srgb,var(--t1) 10%,var(--panel))}

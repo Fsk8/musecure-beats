@@ -56,7 +56,7 @@ export function SavePanel({
         </div>
       )}
       <p className="hint" aria-live="polite">
-        {message || `El proyecto guarda notas, escala, kit y mezcla para volver a abrirlo. El WAV se graba en tiempo real mientras suena, con ${TAIL_SECONDS} s de cola para el reverb y el delay.`}
+        {message || `El proyecto guarda notas, escala, kit y mezcla para volver a abrirlo. El WAV se renderiza aparte (sin cortes, aunque el equipo esté ocupado), con ${TAIL_SECONDS} s de cola para el reverb y el delay.`}
       </p>
     </Panel>
   );

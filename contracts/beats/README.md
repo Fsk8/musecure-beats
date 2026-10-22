@@ -52,7 +52,7 @@ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/release
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/near-cli-rs/releases/latest/download/near-cli-rs-installer.sh | sh
 ```
 
-Este proyecto fija Rust 1.93 en `rust-toolchain.toml`; rustup lo instala solo la primera vez que corres `cargo` en esta carpeta.
+Este proyecto fija Rust 1.97 en `rust-toolchain.toml`; rustup lo instala solo la primera vez que corres `cargo` en esta carpeta.
 
 ### 2. Compilar
 
@@ -97,7 +97,7 @@ Si algún comando pide datos de forma interactiva, responde según lo que pregun
 ## Relación con MuSecure (Monad)
 
 - **Mismo modelo de licencias:** las licencias no exclusivas siguen las reglas de MuSecureLicensing y los créditos las de MuSecureCredits.
-- **Catálogo unido:** cada beat puede guardar `musecure_fingerprint`, el mismo hash de huella Chromaprint que usa MuSecureRegistry. Con `get_beats_by_fingerprint` la app muestra juntas las licencias de una obra en Monad y en NEAR.
+- **Catálogo unido:** cada beat guarda `musecure_fingerprint`, la misma huella acústica que usa MuSecureRegistry como `fingerprintHash` (SHA-256 de 120 cuadros de chroma del audio, calculados con FFmpeg a 11025 Hz mono). Con `get_beats_by_fingerprint` la app muestra juntas las licencias de una obra en Monad y en NEAR.
 - **Siguiente paso:** anclar cada registro también en MuSecureRegistry con Chain Signatures, para que una cuenta de NEAR registre la obra en Monad sin otra wallet. Falta confirmar el soporte de Monad Testnet.
 
 ## Decisiones actuales

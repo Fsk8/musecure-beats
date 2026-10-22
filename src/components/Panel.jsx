@@ -32,6 +32,17 @@ export function Panel({ id, title, summary, defaultOpen = true, className = '', 
     writeOpen(id, open);
   }, [id, open]);
 
+  // Otros botones pueden abrir este módulo: window.dispatchEvent(new CustomEvent('msb:open-panel', { detail: id }))
+  useEffect(() => {
+    const onOpen = (e) => {
+      if (e.detail !== id) return;
+      setOpen(true);
+      requestAnimationFrame(() => document.getElementById(`panel-${id}`)?.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    };
+    window.addEventListener('msb:open-panel', onOpen);
+    return () => window.removeEventListener('msb:open-panel', onOpen);
+  }, [id]);
+
   return (
     <section className={`panel collapsible${open ? ' is-open' : ''} ${className}`}>
       <button className="panel-head" aria-expanded={open} aria-controls={`panel-${id}`}

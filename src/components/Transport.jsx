@@ -1,7 +1,7 @@
 import { cutHz } from '../audio/engine';
 
 export function Transport({
-  S, mutate, playing, onTogglePlay, onLenChange, onRandomTrack, onAskRandomAll, onClearTrack, children,
+  S, mutate, playing, onTogglePlay, onLenChange, onRandomTrack, onAskRandomAll, onClearTrack, lite, onLiteChange, children,
 }) {
   return (
     <section className="panel">
@@ -19,6 +19,11 @@ export function Transport({
           <input id="metro" type="checkbox" role="switch" checked={S.metro}
             onChange={(e) => mutate((d) => { d.metro = e.target.checked; })} />
           Metrónomo
+        </label>
+        <label htmlFor="lite" className="switch" title="Sonidos más simples en vivo para equipos lentos. El WAV sale igual con calidad completa.">
+          <input id="lite" type="checkbox" role="switch" checked={lite}
+            onChange={(e) => onLiteChange(e.target.checked)} />
+          Modo liviano
         </label>
         <label htmlFor="swing">
           Swing
@@ -48,7 +53,9 @@ export function Transport({
         <button onClick={onRandomTrack}>Sorpréndeme (pista)</button>
         <button id="randAll" onClick={onAskRandomAll}>Sorpréndeme (todo)</button>
         <button onClick={onClearTrack}>Borrar pista</button>
-        <button disabled title="Llega con el contrato en NEAR">Registrar beat</button>
+        <button onClick={() => window.dispatchEvent(new CustomEvent('msb:open-panel', { detail: 'register' }))}>
+          Registrar beat
+        </button>
       </div>
       {children}
     </section>

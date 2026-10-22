@@ -9,13 +9,27 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ffmpeg/core": "0.12.10",
+    "@ffmpeg/ffmpeg": "0.12.10",
+    "@ffmpeg/util": "0.12.2",
+    "@near-js/accounts": "2.3.1",
+    "@near-js/crypto": "2.5.1",
+    "@near-js/providers": "2.3.1",
+    "@near-js/signers": "2.5.1",
+    "@near-js/tokens": "2.3.1",
+    "@near-js/transactions": "2.3.1",
+    "@noble/hashes": "1.8.0",
+    "@privy-io/node": "0.35.0",
+    "@privy-io/react-auth": "2.25.0",
+    "jose": "5.9.6",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "tone": "14.8.49"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "4.3.4",
-    "vite": "5.4.11"
+    "vite": "5.4.11",
+    "vite-plugin-node-polyfills": "0.24.0"
   },
   "packageManager": "pnpm@10.18.3"
 }

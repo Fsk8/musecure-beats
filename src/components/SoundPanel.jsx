@@ -39,6 +39,13 @@ export function SoundPanel({ S, mutate }) {
             <option value="saw">Saw (sierra)</option>
           </select>
         </label>
+        <label htmlFor="bassSound">
+          Bajo
+          <select id="bassSound" value={S.bassSound} onChange={set('bassSound')}>
+            <option value="classic">Clásico (sierra)</option>
+            <option value="synth">Synth bass (con sub)</option>
+          </select>
+        </label>
         <label htmlFor="pad">
           Sonido acordes
           <select id="pad" value={S.pad} onChange={set('pad')}>

@@ -20,6 +20,7 @@ export function defaultState() {
     scale: 'pmen',
     wave: 'tri',
     pad: 'dreamy',
+    bassSound: 'classic',
     oct: [0, 0, 0, 1], // batería, bajo, lead, acordes
     tab: 0,
     page: 0,
@@ -79,6 +80,7 @@ export function normalizeState(s) {
     return Number.isInteger(v) && v >= -2 && v <= 2 ? v : d;
   });
   if (!['dreamy', 'soft'].includes(S.pad)) S.pad = base.pad;
+  if (!['classic', 'synth'].includes(S.bassSound)) S.bassSound = base.bassSound;
   return S;
 }
 
