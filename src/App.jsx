@@ -72,9 +72,28 @@ export default function App() {
       engine.stop();
       setPlaying(false);
     } else {
+      window.dispatchEvent(new Event('msb:stop-gallery'));
       engine.start();
       setPlaying(true);
     }
+  }
+
+  // La galería pide parar el secuenciador cuando empieza a sonar un beat registrado.
+  useEffect(() => {
+    const stop = () => { if (engine.playing) { engine.stop(); setPlaying(false); } };
+    window.addEventListener('msb:stop-sequencer', stop);
+    return () => window.removeEventListener('msb:stop-sequencer', stop);
+  }, [engine]);
+
+  /** Abre en el secuenciador el proyecto de un beat registrado (descargado de IPFS). */
+  function openFromGallery(text, beat) {
+    const loaded = parseProjectFile(text);
+    if (!window.confirm(`Se reemplazará el beat que tienes abierto por "${beat.title}". Si quieres conservarlo, guárdalo antes. ¿Continuar?`)) return;
+    if (engine.playing) { engine.stop(); setPlaying(false); }
+    setUndoBuf(null);
+    replaceState({ ...loaded, tab: S.tab, page: 0, emode: S.emode });
+    setSaveMessage(`Abierto desde NEAR: #${beat.token_id} "${beat.title}"`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function handleCell(r, c) {
@@ -242,7 +261,7 @@ export default function App() {
 
       <Challenge done={challengeDone(S)} />
 
-      <Gallery />
+      <Gallery onOpenProject={openFromGallery} />
 
       <p className="note">
         Prototipo. Todos los sonidos son sintetizados, también el kit andino (una aproximación).

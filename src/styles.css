@@ -126,3 +126,11 @@ input.text.pct{width:90px;flex:0 0 auto}
 .seg button[aria-checked="true"]{background:var(--ink);color:var(--bg);font-weight:600}
 .warn-text{color:var(--t0)}
 .success{display:grid;gap:4px;border:1px solid var(--t1);border-radius:10px;padding:12px;background:color-mix(in srgb,var(--t1) 10%,var(--panel))}
+
+.beat-details{display:grid;gap:6px;border-top:1px solid var(--line);padding-top:8px;min-width:0}
+.hash-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;min-width:0}
+.hash-row code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--beat);padding:1px 5px;border-radius:4px}
+.credit-list{margin:0;padding-left:16px;font-size:12px;display:grid;gap:2px}
+button.mini{padding:2px 6px;font-size:11px}
+.ok-text{color:var(--t1);font-size:12px}
+.beat-list{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
