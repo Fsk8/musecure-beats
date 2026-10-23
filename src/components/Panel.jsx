@@ -25,7 +25,7 @@ function writeOpen(id, open) {
  * Módulo desplegable. Recuerda si estaba abierto en este navegador.
  * `summary` se muestra en la barra cuando está cerrado.
  */
-export function Panel({ id, title, summary, defaultOpen = true, className = '', children }) {
+export function Panel({ id, title, summary, defaultOpen = true, className = '', plain = false, children }) {
   const [open, setOpen] = useState(() => readOpen(id, defaultOpen));
 
   useEffect(() => {
@@ -42,6 +42,9 @@ export function Panel({ id, title, summary, defaultOpen = true, className = '', 
     window.addEventListener('msb:open-panel', onOpen);
     return () => window.removeEventListener('msb:open-panel', onOpen);
   }, [id]);
+
+  // Dentro de un panel lateral no hace falta desplegar: se muestra siempre, sin cabecera.
+  if (plain) return <section className={`panel plain ${className}`}>{children}</section>;
 
   return (
     <section className={`panel collapsible${open ? ' is-open' : ''} ${className}`}>

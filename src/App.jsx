@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AudioEngine, loopSeconds } from './audio/engine';
 import { playhead } from './audio/playhead';
 import { KITS, ROOTS, SCALES, TRACKS, VEL, computeTheory } from './music/theory';
@@ -16,6 +16,7 @@ import { Challenge } from './components/Challenge';
 import { SavePanel } from './components/SavePanel';
 import { AccountBar } from './components/AccountBar';
 import { Gallery } from './components/Gallery';
+import { Drawer } from './components/Drawer';
 import { RegisterPanel } from './components/RegisterPanel';
 
 export default function App() {
@@ -33,6 +34,16 @@ export default function App() {
   const [recProgress, setRecProgress] = useState(0);
   const [saveMessage, setSaveMessage] = useState('');
   const [wavLoops, setWavLoops] = useState(4);
+  // Panel lateral abierto: 'save' | 'register' | 'gallery' | null.
+  const [drawer, setDrawer] = useState(null);
+  const closeDrawer = useCallback(() => setDrawer(null), []);
+  const toggleDrawer = (id) => setDrawer((d) => (d === id ? null : id));
+  // Botones como "Registrar beat" piden abrir un panel con este evento.
+  useEffect(() => {
+    const onOpen = (e) => { if (['save', 'register', 'gallery'].includes(e.detail)) setDrawer(e.detail); };
+    window.addEventListener('msb:open-panel', onOpen);
+    return () => window.removeEventListener('msb:open-panel', onOpen);
+  }, []);
   // Una vez registrado, el beat abierto pasa a ser el nuevo remix: se quita el vínculo pendiente.
   const clearRemix = () => mutate((d) => { d.remixOf = null; });
   // Preferencia del equipo, no del beat: por eso no va en el proyecto.
@@ -98,6 +109,7 @@ export default function App() {
     setUndoBuf(null);
     replaceState({ ...loaded, tab: S.tab, page: 0, emode: S.emode });
     setSaveMessage(`Abierto para remixar: #${beat.token_id} "${beat.title}". Al registrarlo quedará como su remix.`);
+    setDrawer(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -204,8 +216,11 @@ export default function App() {
 
   const subtitle = `${KITS[S.kit].name} · ${ROOTS[S.root][1]} ${SCALES[S.scale][0].toLowerCase()} · ${S.len} pasos`;
 
+  const drawerTitles = { save: 'Guardar y exportar', register: 'Registrar en NEAR', gallery: 'Beats en NEAR' };
+
   return (
-    <div className="wrap">
+    <>
+    <div className={`wrap${drawer ? ' with-drawer' : ''}`}>
       <header>
         <div className="brand">
           <h1>MuSecure <span>Beats</span></h1>
@@ -213,6 +228,14 @@ export default function App() {
         </div>
         <AccountBar />
       </header>
+
+      <nav className="side-nav" aria-label="Paneles">
+        <button aria-pressed={drawer === 'save'} onClick={() => toggleDrawer('save')}>Guardar y exportar</button>
+        <button aria-pressed={drawer === 'register'} onClick={() => toggleDrawer('register')}>
+          Registrar en NEAR{S.remixOf ? ` · remix de #${S.remixOf.token_id}` : ''}
+        </button>
+        <button aria-pressed={drawer === 'gallery'} onClick={() => toggleDrawer('gallery')}>Galería</button>
+      </nav>
 
       <Transport
         S={S}
@@ -229,22 +252,6 @@ export default function App() {
         {confirmAll && <ConfirmRandomAll onYes={randomizeAll} onNo={() => setConfirmAll(false)} />}
       </Transport>
 
-      <SavePanel
-        title={S.title}
-        onTitle={(v) => mutate((d) => { d.title = v; })}
-        onSaveProject={saveProject}
-        onOpenProject={openProject}
-        loops={wavLoops}
-        onLoops={setWavLoops}
-        loopSec={loopSeconds(S)}
-        onExportWav={exportWav}
-        onCancel={() => engine.cancelRecording()}
-        recording={recording}
-        progress={recProgress}
-        message={saveMessage}
-      />
-
-      <RegisterPanel title={S.title} buildFiles={buildRegisterFiles} remixOf={S.remixOf} onRegistered={clearRemix} />
 
       <SoundPanel S={S} mutate={mutate} />
       <Mixer S={S} mutate={mutate} />
@@ -266,12 +273,37 @@ export default function App() {
 
       <Challenge done={challengeDone(S)} />
 
-      <Gallery onOpenProject={openFromGallery} />
 
       <p className="note">
         Prototipo. Todos los sonidos son sintetizados, también el kit andino (una aproximación).
         Tu beat se guarda automáticamente solo en este navegador: usa "Guardar proyecto" para tener una copia.
       </p>
     </div>
+
+    <Drawer open={Boolean(drawer)} title={drawerTitles[drawer] || ''} onClose={closeDrawer}>
+      <div hidden={drawer !== 'save'}>
+      <SavePanel
+        title={S.title}
+        onTitle={(v) => mutate((d) => { d.title = v; })}
+        onSaveProject={saveProject}
+        onOpenProject={openProject}
+        loops={wavLoops}
+        onLoops={setWavLoops}
+        loopSec={loopSeconds(S)}
+        onExportWav={exportWav}
+        onCancel={() => engine.cancelRecording()}
+        recording={recording}
+        progress={recProgress}
+        message={saveMessage}
+      />
+      </div>
+      <div hidden={drawer !== 'register'}>
+      <RegisterPanel title={S.title} buildFiles={buildRegisterFiles} remixOf={S.remixOf} onRegistered={clearRemix} />
+      </div>
+      <div hidden={drawer !== 'gallery'}>
+      <Gallery onOpenProject={openFromGallery} />
+      </div>
+    </Drawer>
+    </>
   );
 }

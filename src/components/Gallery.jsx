@@ -355,7 +355,7 @@ export function Gallery({ onOpenProject }) {
   const summary = beats ? `${beats.length} ${beats.length === 1 ? 'beat' : 'beats'} en NEAR testnet` : 'Cargando…';
 
   return (
-    <Panel id="gallery" title="Beats en NEAR" summary={summary}>
+    <Panel plain id="gallery" title="Beats en NEAR" summary={summary}>
       <div className="bar spread">
         <span className="hint">
           <a href={explorerAccountUrl(CONTRACT_ID)} target="_blank" rel="noreferrer">Contrato: {CONTRACT_ID}</a>

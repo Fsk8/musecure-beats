@@ -53,9 +53,6 @@ export function Transport({
         <button onClick={onRandomTrack}>Sorpréndeme (pista)</button>
         <button id="randAll" onClick={onAskRandomAll}>Sorpréndeme (todo)</button>
         <button onClick={onClearTrack}>Borrar pista</button>
-        <button onClick={() => window.dispatchEvent(new CustomEvent('msb:open-panel', { detail: 'register' }))}>
-          Registrar beat
-        </button>
       </div>
       {children}
     </section>

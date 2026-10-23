@@ -17,7 +17,7 @@ export function SavePanel({
   const totalSec = loopSec * loops + TAIL_SECONDS;
 
   return (
-    <Panel id="save" title="Guardar y exportar" defaultOpen={false}
+    <Panel plain id="save" title="Guardar y exportar" defaultOpen={false}
       summary={recording ? `Grabando… quedan ${fmtTime(totalSec * (1 - progress))}` : title || 'Sin nombre'}>
       <div className="bar">
         <label htmlFor="title">

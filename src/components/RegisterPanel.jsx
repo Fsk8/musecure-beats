@@ -132,7 +132,7 @@ export function RegisterPanel({ title, buildFiles, remixOf, onRegistered }) {
       : remixOf ? `Remix de #${remixOf.token_id}` : 'Listo para registrar';
 
   return (
-    <Panel id="register" title="Registrar en NEAR" defaultOpen={false} summary={summary}>
+    <Panel plain id="register" title="Registrar en NEAR" defaultOpen={false} summary={summary}>
       {status === 'no-auth' && <p className="hint">Configura VITE_PRIVY_APP_ID para iniciar sesión y registrar.</p>}
       {status === 'signed-out' && (
         <div className="bar">
