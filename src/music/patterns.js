@@ -180,6 +180,17 @@ const DRUM_STYLES = [
   () => ({ kick: [0, ...pick(2, [2, 3, 6, 7, 9, 10, 11, 14, 15])], snare: pick(2, [4, 5, 6, 10, 12, 13, 14]), ghost: 0.08 }), // libre
 ];
 
+/** Progresiones típicas (grados: 0 = I, 3 = IV, 4 = V, 5 = vi...). */
+const PROGRESSIONS = [[0, 4, 5, 3], [0, 5, 3, 4], [5, 3, 0, 4], [0, 3, 4, 3], [1, 4, 0, 0], [0, 3, 0, 4], [0, 6, 5, 4], [5, 4, 3, 4]];
+/** Ritmos de acordes dentro del compás: en qué pasos suenan y cada cuántos pasos cambia el acorde. */
+const CHORD_RHYTHMS = [
+  { hits: [0, 8], every: 8 },
+  { hits: [0], every: 16 },
+  { hits: [0, 4, 8, 12], every: 8 },
+  { hits: [0, 6, 8, 14], every: 8 },
+  { hits: [0, 3, 6, 10], every: 16 },
+];
+
 export function randomTrack(t, len, theory) {
   const G = emptyGrid(TRACKS[t].rows);
   const P = emptyGrid(TRACKS[t].rows, 100);
@@ -196,6 +207,56 @@ export function randomTrack(t, len, theory) {
     () => Math.random() < 0.85, // semicorcheas casi seguidas
   ][hatMode]();
 
+  // --- Melodía y armonía: también con estilos, para que no salga siempre lo mismo.
+  // Progresión de acordes (grados de la escala; 0 = I). Se usa en acordes y en el bajo "fundamental".
+  const avail = theory ? [...Array(7).keys()].filter((deg) => theory.chords[6 - deg]) : [0];
+  const prog = (() => {
+    const options = PROGRESSIONS.map((pr) => pr.filter((deg) => avail.includes(deg))).filter((pr) => pr.length >= 3);
+    return options.length ? options[Math.floor(Math.random() * options.length)] : [0, ...pick(3, avail)];
+  })();
+  const degAt = (c, every) => prog[Math.floor(c / every) % prog.length];
+  const chordRhythm = CHORD_RHYTHMS[Math.floor(Math.random() * CHORD_RHYTHMS.length)];
+  const chordAt = (c) => {
+    if (!chordRhythm.hits.includes(c % 16)) return;
+    G[6 - degAt(c, chordRhythm.every)][c] = c % 16 === chordRhythm.hits[0] ? 1 : vv();
+  };
+
+  // Bajo: fundamental de la progresión, rebote de octava, caminante o libre (filas: 7 = tónica, 0 = octava).
+  const bassStyle = Math.floor(Math.random() * 4);
+  let walk = 7;
+  const bassAt = (c) => {
+    const b = c % 16;
+    const rootRow = 7 - (degAt(c, 16) % 8);
+    if (bassStyle === 0 && (b % 4 === 0 || (b % 4 === 3 && Math.random() < 0.3))) G[rootRow][c] = b % 4 ? 2 : 1;
+    if (bassStyle === 1 && b % 2 === 0) G[b % 4 === 0 ? rootRow : Math.max(0, rootRow - 4)][c] = b % 4 ? 2 : 1;
+    if (bassStyle === 2 && b % 2 === 0) {
+      walk = Math.min(7, Math.max(0, walk + [-1, 1, -2, 2][Math.floor(Math.random() * 4)]));
+      G[b === 0 ? rootRow : walk][c] = b % 4 ? 2 : 1;
+    }
+    if (bassStyle === 3 && Math.random() < 0.35) { const r = Math.random() < 0.5 ? 7 : Math.floor(Math.random() * 8); G[r][c] = vv(); P[r][c] = pp(); }
+  };
+
+  // Lead: un motivo corto que se repite con variaciones (así suena a melodía y no a notas sueltas).
+  const motifLen = [4, 8, 8, 16][Math.floor(Math.random() * 4)];
+  const motif = (() => {
+    const m = Array(motifLen).fill(null);
+    let r = Math.floor(Math.random() * 8);
+    const notes = 2 + Math.floor(Math.random() * Math.max(2, motifLen / 2));
+    pick(notes, [...Array(motifLen).keys()]).sort((x, y) => x - y).forEach((i) => {
+      r = Math.min(7, Math.max(0, r + [-2, -1, -1, 0, 1, 1, 2][Math.floor(Math.random() * 7)]));
+      m[i] = r;
+    });
+    return m;
+  })();
+  const leadAt = (c) => {
+    const r = motif[c % motifLen];
+    if (r === null) return;
+    const rep = Math.floor(c / motifLen);
+    if (rep > 0 && Math.random() < 0.15) return; // a veces falta una nota
+    const shifted = rep % 2 === 1 && Math.random() < 0.5 ? Math.min(7, Math.max(0, r + (Math.random() < 0.5 ? 1 : -1))) : r;
+    G[shifted][c] = vv(); P[shifted][c] = pp();
+  };
+
   for (let c = 0; c < len; c++) {
     if (t === 0) {
       const b = c % 16; // posición dentro del compás
@@ -207,18 +268,9 @@ export function randomTrack(t, len, theory) {
       if (Math.random() < 0.1 && !G[0][c]) { G[0][c] = 2; P[0][c] = pp(); }
       if (Math.random() < style.ghost && !G[1][c]) { G[1][c] = 2; P[1][c] = pp(); }
     }
-    if (t === 1 && Math.random() < 0.35) {
-      const r = Math.random() < 0.5 ? 7 : Math.floor(Math.random() * 8);
-      G[r][c] = vv(); P[r][c] = pp();
-    }
-    if (t === 2 && Math.random() < 0.4) {
-      const r = Math.floor(Math.random() * 8);
-      G[r][c] = vv(); P[r][c] = pp();
-    }
-    if (t === 3 && c % 8 === 0) {
-      const ok = [...Array(7).keys()].filter((r) => theory.chords[r]);
-      G[ok[Math.floor(Math.random() * ok.length)]][c] = 1;
-    }
+    if (t === 1) bassAt(c);
+    if (t === 2) leadAt(c);
+    if (t === 3) chordAt(c);
   }
   return { g: G, p: P };
 }
@@ -296,4 +348,27 @@ export function remixSimilarity(parent, S) {
   const measured = melodic.length ? melodic : tracks.filter((v) => v !== null);
   const overall = measured.length ? Math.round(measured.reduce((a, v) => a + v, 0) / measured.length) : 100;
   return { overall, tracks, parentNotes: total };
+}
+
+/** Desplaza una pista un paso a la izquierda (-1) o a la derecha (+1), dando la vuelta dentro del largo. */
+export function rotateTrack(G, P, len, dir) {
+  const rot = (rows) => rows.map((row) => row.map((v, c) => (c < len ? row[(c - dir + len) % len] : v)));
+  return { g: rot(G), p: rot(P) };
+}
+
+/** Mueve el compás `from` (de 16 pasos) a la posición `to` en las pistas indicadas. */
+export function moveBar(S, from, to, tracks) {
+  if (from === to) return;
+  const bars = S.len / 16;
+  const order = [...Array(bars).keys()];
+  order.splice(to, 0, order.splice(from, 1)[0]);
+  const reorder = (row) => {
+    const copy = row.slice();
+    order.forEach((src, dst) => { for (let k = 0; k < 16; k++) copy[dst * 16 + k] = row[src * 16 + k]; });
+    return copy;
+  };
+  tracks.forEach((t) => {
+    S.g[t] = S.g[t].map(reorder);
+    S.p[t] = S.p[t].map(reorder);
+  });
 }

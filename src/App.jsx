@@ -4,7 +4,7 @@ import { playhead } from './audio/playhead';
 import { KITS, ROOTS, SCALES, TRACKS, VEL, computeTheory } from './music/theory';
 import {
   challengeDone, defaultState, emptyGrid, extendPattern, fileSafeName, nextCell, parseProjectFile, projectFile,
-  quantizeTrack, randomTrack,
+  moveBar, quantizeTrack, randomTrack, rotateTrack,
 } from './music/patterns';
 import { audioBufferToWav, downloadBlob } from './io/files';
 import { useBeatState } from './state/useBeatState';
@@ -149,6 +149,32 @@ export default function App() {
     setConfirmAll(false);
   }
 
+  /** Cambia kit y sonidos al azar, sin tocar las notas ni la escala. */
+  function randomizeSounds() {
+    const any = (list) => list[Math.floor(Math.random() * list.length)];
+    mutate((d) => {
+      d.kit = any(Object.keys(KITS));
+      d.wave = any(['tri', 'saw']);
+      d.bassSound = any(['classic', 'synth']);
+      d.pad = any(['dreamy', 'soft']);
+      d.arp = any(['off', 'off', 'up', 'down', 'updown', 'rand']);
+    });
+  }
+
+  /** Corre la pista actual un paso (dir -1 izquierda, +1 derecha). */
+  function shiftTrack(dir) {
+    const { g, p } = rotateTrack(S.g[S.tab], S.p[S.tab], S.len, dir);
+    mutate((d) => { d.g[d.tab] = g; d.p[d.tab] = p; });
+  }
+
+  /** Arrastrar un compás a otro lugar: en la pista actual o en todas. */
+  function handleMoveBar(from, to, allTracks) {
+    mutate((d) => {
+      moveBar(d, from, to, allTracks ? [0, 1, 2, 3] : [d.tab]);
+      d.page = to;
+    });
+  }
+
   function clearTrack() {
     mutate((d) => {
       d.g[d.tab] = emptyGrid(TRACKS[d.tab].rows);
@@ -264,6 +290,7 @@ export default function App() {
         onRandomTrack={randomizeCurrent}
         onAskRandomAll={() => setConfirmAll(true)}
         onClearTrack={clearTrack}
+        onRandomSounds={randomizeSounds}
         lite={lite}
         onLiteChange={setLite}
       >
@@ -286,6 +313,8 @@ export default function App() {
         onQuantize={quantize}
         canUndo={Boolean(undoBuf)}
         onUndo={undoQuantize}
+        onShift={shiftTrack}
+        onMoveBar={handleMoveBar}
         qMessage={qMessage}
       />
 

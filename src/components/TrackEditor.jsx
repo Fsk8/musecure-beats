@@ -1,4 +1,4 @@
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { TRACKS, rowNames } from '../music/theory';
 import { usePlayhead } from '../audio/playhead';
 import { Panel } from './Panel';
@@ -10,7 +10,7 @@ const HINTS = {
 
 export function TrackEditor({
   S, mutate, theory, follow, setFollow, onCell,
-  qGrid, setQGrid, onQuantize, canUndo, onUndo, qMessage,
+  qGrid, setQGrid, onQuantize, canUndo, onUndo, qMessage, onShift, onMoveBar,
 }) {
   const t = S.tab;
 
@@ -51,6 +51,9 @@ export function TrackEditor({
         </label>
         <button onClick={onQuantize}>Alinear pista</button>
         <button onClick={onUndo} disabled={!canUndo}>Deshacer</button>
+        <span className="label">Correr pista</span>
+        <button onClick={() => onShift(-1)} aria-label="Correr la pista un paso a la izquierda" title="Un paso antes">◀</button>
+        <button onClick={() => onShift(1)} aria-label="Correr la pista un paso a la derecha" title="Un paso después">▶</button>
         <span className="hint" aria-live="polite">{qMessage}</span>
       </div>
 
@@ -65,6 +68,7 @@ export function TrackEditor({
         setFollow={setFollow}
         mutate={mutate}
         onCell={onCell}
+        onMoveBar={onMoveBar}
       />
       <p className="hint">{HINTS[S.emode]}</p>
     </Panel>
@@ -72,7 +76,9 @@ export function TrackEditor({
 }
 
 /** Páginas + cuadrícula. Es lo único que se redibuja con el cursor de reproducción. */
-const PlayGrid = memo(function PlayGrid({ track, names, G, P, page, len, follow, setFollow, mutate, onCell }) {
+const PlayGrid = memo(function PlayGrid({ track, names, G, P, page, len, follow, setFollow, mutate, onCell, onMoveBar }) {
+  const [dragFrom, setDragFrom] = useState(null);
+  const [allTracks, setAllTracks] = useState(true);
   const step = usePlayhead();
   const pageCount = len / 16;
   const livePage = step >= 0 ? Math.floor(step / 16) : -1;
@@ -87,11 +93,20 @@ const PlayGrid = memo(function PlayGrid({ track, names, G, P, page, len, follow,
       {pageCount > 1 && (
         <div className="pages">
           {[...Array(pageCount).keys()].map((p) => (
-            <button key={p} className={`page${livePage === p ? ' live' : ''}`} aria-current={page === p}
+            <button key={p} className={`page${livePage === p ? ' live' : ''}${dragFrom === p ? ' dragging' : ''}`} aria-current={page === p}
+              draggable title="Arrastra para cambiar el orden de los compases"
+              onDragStart={(e) => { setDragFrom(p); e.dataTransfer.effectAllowed = 'move'; }}
+              onDragOver={(e) => { if (dragFrom !== null) e.preventDefault(); }}
+              onDrop={(e) => { e.preventDefault(); if (dragFrom !== null) onMoveBar(dragFrom, p, allTracks); setDragFrom(null); }}
+              onDragEnd={() => setDragFrom(null)}
               onClick={() => { setFollow(false); mutate((d) => { d.page = p; }); }}>
-              {p * 16 + 1}–{p * 16 + 16}
+              ⠿ {p * 16 + 1}–{p * 16 + 16}
             </button>
           ))}
+          <label htmlFor="moveAll" className="hint">
+            <input type="checkbox" id="moveAll" checked={allTracks} onChange={(e) => setAllTracks(e.target.checked)} />
+            Mover compases en todas las pistas
+          </label>
         </div>
       )}
       <div className="scroll">
