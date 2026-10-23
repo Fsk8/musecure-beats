@@ -33,6 +33,8 @@ export default function App() {
   const [recProgress, setRecProgress] = useState(0);
   const [saveMessage, setSaveMessage] = useState('');
   const [wavLoops, setWavLoops] = useState(4);
+  // Una vez registrado, el beat abierto pasa a ser el nuevo remix: se quita el vínculo pendiente.
+  const clearRemix = () => mutate((d) => { d.remixOf = null; });
   // Preferencia del equipo, no del beat: por eso no va en el proyecto.
   const [lite, setLite] = useState(() => { try { return localStorage.getItem('msb-lite') === '1'; } catch { return false; } });
 
@@ -85,14 +87,17 @@ export default function App() {
     return () => window.removeEventListener('msb:stop-sequencer', stop);
   }, [engine]);
 
-  /** Abre en el secuenciador el proyecto de un beat registrado (descargado de IPFS). */
+  /** Abre en el secuenciador el proyecto de un beat registrado (descargado de IPFS) para remixarlo. */
   function openFromGallery(text, beat) {
     const loaded = parseProjectFile(text);
     if (!window.confirm(`Se reemplazará el beat que tienes abierto por "${beat.title}". Si quieres conservarlo, guárdalo antes. ¿Continuar?`)) return;
+    const link = { token_id: beat.token_id, title: beat.title, creator: beat.creator, remix_price: beat.remix_price };
+    loaded.remixOf = link;
+    loaded.title = `${beat.title} (remix)`;
     if (engine.playing) { engine.stop(); setPlaying(false); }
     setUndoBuf(null);
     replaceState({ ...loaded, tab: S.tab, page: 0, emode: S.emode });
-    setSaveMessage(`Abierto desde NEAR: #${beat.token_id} "${beat.title}"`);
+    setSaveMessage(`Abierto para remixar: #${beat.token_id} "${beat.title}". Al registrarlo quedará como su remix.`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -239,7 +244,7 @@ export default function App() {
         message={saveMessage}
       />
 
-      <RegisterPanel title={S.title} buildFiles={buildRegisterFiles} />
+      <RegisterPanel title={S.title} buildFiles={buildRegisterFiles} remixOf={S.remixOf} onRegistered={clearRemix} />
 
       <SoundPanel S={S} mutate={mutate} />
       <Mixer S={S} mutate={mutate} />

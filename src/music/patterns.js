@@ -21,6 +21,8 @@ export function defaultState() {
     wave: 'tri',
     pad: 'dreamy',
     bassSound: 'classic',
+    // Beat original si este es un remix: viaja con el proyecto (guardar/abrir) y no se pierde.
+    remixOf: null,
     oct: [0, 0, 0, 1], // batería, bajo, lead, acordes
     tab: 0,
     page: 0,
@@ -81,6 +83,10 @@ export function normalizeState(s) {
   });
   if (!['dreamy', 'soft'].includes(S.pad)) S.pad = base.pad;
   if (!['classic', 'synth'].includes(S.bassSound)) S.bassSound = base.bassSound;
+  const r = S.remixOf;
+  S.remixOf = r && typeof r.token_id === 'string' && /^\d+$/.test(String(r.remix_price ?? ''))
+    ? { token_id: r.token_id, title: String(r.title || ''), creator: String(r.creator || ''), remix_price: String(r.remix_price) }
+    : null;
   return S;
 }
 

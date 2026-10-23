@@ -118,7 +118,11 @@ function BeatCard({ beat: b, playing, onPlay, onOpen }) {
       </div>
       <div className="bar">
         <button className={playing ? 'primary' : ''} onClick={() => onPlay(b)}>{playing ? '■ Parar' : '▶ Escuchar'}</button>
-        <button onClick={openProject} disabled={opening}>{opening ? 'Abriendo…' : 'Abrir en el secuenciador'}</button>
+        <button onClick={openProject} disabled={opening || !b.remix_allowed}
+          title={b.remix_allowed ? 'Abre el proyecto en el secuenciador; al registrarlo queda como remix de este beat' : 'El dueño no permite remixes'}>
+          {opening ? 'Abriendo…' : !b.remix_allowed ? 'Remix no permitido'
+            : `Remixar${b.remix_price === '0' ? ' (libre)' : ` (${yoctoToNear(b.remix_price)} Ⓝ)`}`}
+        </button>
         <button aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Ocultar detalles' : 'Detalles'}</button>
       </div>
       {openError && <p className="hint warn-text">{openError}</p>}

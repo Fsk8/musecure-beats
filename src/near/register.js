@@ -98,14 +98,17 @@ export function toCredits(rows, what, emailMap = {}) {
   return out;
 }
 
-/** Registra el beat. Devuelve el beat creado y el hash de la transacción (para el explorador). */
-export async function registerBeat(account, args) {
+/**
+ * Registra el beat. Si `remixOf` viene, se registra como remix de ese beat pagando su licencia de remix.
+ * Devuelve el beat creado y el hash de la transacción (para el explorador).
+ */
+export async function registerBeat(account, args, remixOf = null) {
   const outcome = await account.callFunctionRaw({
     contractId: CONTRACT_ID,
-    methodName: 'register_beat',
-    args: { args },
-    gas: GAS,
-    deposit: 0n,
+    methodName: remixOf ? 'remix' : 'register_beat',
+    args: remixOf ? { parent_id: remixOf.token_id, args } : { args },
+    gas: remixOf ? GAS * 2n : GAS,
+    deposit: remixOf ? BigInt(remixOf.remix_price || '0') : 0n,
   });
   const failure = outcome?.status?.Failure;
   if (failure) throw new Error(`El contrato rechazó el registro: ${JSON.stringify(failure)}`);

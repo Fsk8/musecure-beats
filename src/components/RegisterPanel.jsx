@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Panel } from './Panel';
 import { useNear } from '../near/NearProvider';
+import { yoctoToNear } from '../near/contract';
 import { CONTRACT_ID, explorerTokenUrl, explorerTxUrl, shortAccount } from '../near/config';
 import { TRACKS } from '../music/theory';
 import { collectEmails, nearToYocto, registerBeat, resolveEmails, sha256Hex, toCredits, uploadToIpfs } from '../near/register';
@@ -27,8 +28,8 @@ function CreditRows({ rows, setRows, idPrefix }) {
   );
 }
 
-export function RegisterPanel({ title, buildFiles }) {
-  const { status, account, accountId, login, refresh, activate, activationError, getAccessToken } = useNear();
+export function RegisterPanel({ title, buildFiles, remixOf, onRegistered }) {
+  const { status, account, accountId, balance, login, refresh, activate, activationError, getAccessToken } = useNear();
   const [mode, setMode] = useState('whole');
   const [whole, setWhole] = useState([]);
   const [tracks, setTracks] = useState(TRACKS.map(() => ({ weight: 25, rows: [] })));
@@ -71,6 +72,9 @@ export function RegisterPanel({ title, buildFiles }) {
       if (emails.length) setStep('Preparando las cuentas de los colaboradores…');
       const emailMap = await resolveEmails(emails, getAccessToken);
       const credits = buildCredits(emailMap);
+      if (remixOf && balance !== null && Number(yoctoToNear(remixOf.remix_price, 6)) + 0.01 > balance) {
+        throw new Error(`No te alcanza el saldo: la licencia de remix cuesta ${yoctoToNear(remixOf.remix_price)} Ⓝ y tienes ${balance.toFixed(3)} Ⓝ`);
+      }
       const remix_price = nearToYocto(remixPrice);
       const lease_price = nearToYocto(leasePrice);
       const license_uri = licenseUri.trim() || null;
@@ -111,8 +115,9 @@ export function RegisterPanel({ title, buildFiles }) {
         license_uri,
         lease_price,
         musecure_fingerprint,
-      });
+      }, remixOf);
       setResult(beat);
+      onRegistered?.(beat);
       refresh();
       window.dispatchEvent(new Event('msb:beats-changed'));
     } catch (e) {
@@ -122,7 +127,9 @@ export function RegisterPanel({ title, buildFiles }) {
     }
   }
 
-  const summary = result ? `Registrado: #${result.token_id}` : status === 'active' ? 'Listo para registrar' : 'Requiere iniciar sesión';
+  const summary = result ? `Registrado: #${result.token_id}`
+    : status !== 'active' ? 'Requiere iniciar sesión'
+      : remixOf ? `Remix de #${remixOf.token_id}` : 'Listo para registrar';
 
   return (
     <Panel id="register" title="Registrar en NEAR" defaultOpen={false} summary={summary}>
@@ -143,6 +150,16 @@ export function RegisterPanel({ title, buildFiles }) {
 
       {status === 'active' && (
         <>
+          {remixOf && (
+            <div className="remix-banner">
+              <strong>Remix de #{remixOf.token_id} "{remixOf.title}"</strong> de {shortAccount(remixOf.creator)}
+              <span className="hint">
+                Licencia de remix: {remixOf.remix_price === '0' ? 'libre' : `${yoctoToNear(remixOf.remix_price)} Ⓝ, se paga al registrar`}
+                {' '}(la mitad para el dueño del original y la mitad para sus autores). Además, el original recibe el 20 % de lo
+                que ganen los autores de tu remix, para siempre y en cascada.
+              </span>
+            </div>
+          )}
           <p className="hint">
             Se registra <strong>{title || 'Sin nombre'}</strong>: el audio (una vuelta en WAV) y el proyecto quedan en IPFS, y sus
             huellas en el contrato, a nombre de {shortAccount(accountId)}.

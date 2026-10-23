@@ -134,3 +134,4 @@ input.text.pct{width:90px;flex:0 0 auto}
 button.mini{padding:2px 6px;font-size:11px}
 .ok-text{color:var(--t1);font-size:12px}
 .beat-list{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.remix-banner{display:grid;gap:4px;border:1px solid var(--t3);border-radius:8px;padding:8px 10px}
