@@ -11,7 +11,7 @@ export const LEADS = {
   bell: { name: 'Campana (FM)', osc: { type: 'fmsine', modulationIndex: 6, harmonicity: 3.5 }, env: { attack: 0.001, decay: 0.9, sustain: 0, release: 0.9 }, filter: 9000, vol: -4 },
   organ: { name: 'Órgano', osc: { type: 'custom', partials: [1, 0.6, 0.4, 0.25, 0.15] }, env: { attack: 0.01, decay: 0.1, sustain: 0.8, release: 0.1 }, filter: 7000, vol: -8 },
   flute: { name: 'Flauta', osc: { type: 'sine' }, env: { attack: 0.08, decay: 0.2, sustain: 0.6, release: 0.3 }, filter: 5000, vol: -7 },
-  brass: { name: 'Metal (brass)', osc: { type: 'sawtooth' }, env: { attack: 0.05, decay: 0.3, sustain: 0.5, release: 0.2 }, filter: 1500, vol: -2 },
+  marimba: { name: 'Marimba', osc: { type: 'custom', partials: [1, 0, 0.35, 0, 0, 0.12] }, env: { attack: 0.001, decay: 0.35, sustain: 0, release: 0.3 }, filter: 6000, vol: 0 },
   keys: { name: 'Teclas lo-fi', osc: { type: 'fattriangle', count: 2, spread: 10 }, env: { attack: 0.004, decay: 0.4, sustain: 0.1, release: 0.4 }, filter: 1400, vol: 8 },
   pulse: { name: 'Pulso', osc: { type: 'pulse', width: 0.25 }, env: { attack: 0.004, decay: 0.2, sustain: 0.35, release: 0.2 }, filter: 3200, vol: -6 },
 };
@@ -20,7 +20,8 @@ export const BASSES = {
   classic: { name: 'Clásico (sierra)', osc: { type: 'sawtooth' }, Q: 2, env: { attack: 0.005, decay: 0.2, sustain: 0.4, release: 0.15 }, fenv: { attack: 0.005, decay: 0.15, sustain: 0.2, baseFrequency: 120, octaves: 2.6 }, porta: 0, vol: 0 },
   synth: { name: 'Synth bass (con sub)', osc: { type: 'fatsawtooth', count: 2, spread: 18 }, Q: 6, env: { attack: 0.003, decay: 0.25, sustain: 0.35, release: 0.1 }, fenv: { attack: 0.002, decay: 0.22, sustain: 0.1, baseFrequency: 90, octaves: 3.6 }, porta: 0.03, vol: -2, sub: true },
   sub: { name: 'Sub (senoidal)', osc: { type: 'sine' }, Q: 0, env: { attack: 0.005, decay: 0.3, sustain: 0.7, release: 0.15 }, fenv: { attack: 0.01, decay: 0.1, sustain: 1, baseFrequency: 400, octaves: 0 }, porta: 0, vol: -6 },
-  b808: { name: '808 (largo)', osc: { type: 'sine' }, Q: 0, env: { attack: 0.002, decay: 1.2, sustain: 0.2, release: 0.6 }, fenv: { attack: 0.001, decay: 0.1, sustain: 1, baseFrequency: 500, octaves: 0 }, porta: 0.05, vol: -5 },
+  // El 808 de verdad es un bombo afinado: golpe con caída de tono y saturación. Usa su propio sintetizador.
+  b808: { name: '808 (con golpe)', engine: '808', vol: -5 },
   acid: { name: 'Acid (resonante)', osc: { type: 'sawtooth' }, Q: 12, env: { attack: 0.002, decay: 0.2, sustain: 0.2, release: 0.08 }, fenv: { attack: 0.001, decay: 0.12, sustain: 0.05, baseFrequency: 150, octaves: 4.2 }, porta: 0.04, vol: 0 },
   reese: { name: 'Reese (oscuro)', osc: { type: 'fatsawtooth', count: 3, spread: 35 }, Q: 1, env: { attack: 0.01, decay: 0.3, sustain: 0.8, release: 0.2 }, fenv: { attack: 0.05, decay: 0.4, sustain: 0.6, baseFrequency: 200, octaves: 1.5 }, porta: 0, vol: 0 },
   funk: { name: 'Funk (cuadrada)', osc: { type: 'square' }, Q: 3, env: { attack: 0.002, decay: 0.14, sustain: 0.1, release: 0.06 }, fenv: { attack: 0.002, decay: 0.1, sustain: 0.1, baseFrequency: 180, octaves: 2.5 }, porta: 0, vol: 0 },
@@ -45,6 +46,8 @@ export const PADS = {
 
 /** Versión liviana de un oscilador: sin voces extra. */
 export function liteOsc(osc) {
-  if (!osc.type.startsWith('fat')) return osc;
-  return { type: osc.type.slice(3) };
+  if (osc.type.startsWith('fat')) return { type: osc.type.slice(3) };
+  if (osc.type.startsWith('fm') || osc.type.startsWith('am')) return { type: osc.type.slice(2) }; // FM usa 2 osciladores por voz
+  if (osc.type === 'pulse') return { type: 'square' };
+  return osc;
 }

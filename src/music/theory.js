@@ -38,9 +38,9 @@ export const KITS = {
   andino: { name: 'Andino', rows: ['Bombo legüero', 'Chajchas', 'Palmas', 'Charango'] },
   trap: { name: 'Trap', rows: ['Bombo 808 largo', 'Caja trap', 'Hi-hat', 'Clap'] },
   house: { name: 'House', rows: ['Bombo house', 'Clap', 'Hat abierto', 'Shaker'] },
-  techno: { name: 'Techno', rows: ['Bombo techno', 'Rim', 'Hat metálico', 'Ride'] },
+  techno: { name: 'Techno', rows: ['Bombo techno', 'Rim', 'Hat metálico', 'Hat abierto'] },
   dembow: { name: 'Dembow', rows: ['Bombo', 'Caja dembow', 'Hi-hat', 'Timbal'] },
-  jazz: { name: 'Jazz (escobillas)', rows: ['Bombo suave', 'Escobilla', 'Ride', 'Aro'] },
+  jazz: { name: 'Jazz (escobillas)', rows: ['Bombo suave', 'Escobilla', 'Hi-hat', 'Aro'] },
 };
 
 /** Velocidad por valor de celda: 0 apagado, 1 fuerte, 2 suave. */

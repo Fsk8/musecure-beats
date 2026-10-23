@@ -92,6 +92,13 @@ export class AudioEngine {
       envelope: { attack: 0.005, decay: 0.2, sustain: 0.4, release: 0.15 },
       filterEnvelope: { attack: 0.005, decay: 0.15, sustain: 0.2, baseFrequency: 120, octaves: 2.6 },
     }).connect(this.channels[1]);
+    // Bajo 808: bombo afinado (caída de tono) con algo de saturación.
+    this.drive808 = new Tone.Distortion({ distortion: 0.4, wet: 0.35, oversample: 'none' }).connect(this.channels[1]);
+    this.b808 = new Tone.MembraneSynth({
+      pitchDecay: 0.06, octaves: 2.2,
+      envelope: { attack: 0.002, decay: 1.1, sustain: 0.15, release: 0.5 },
+      volume: -2,
+    }).connect(this.drive808);
     // Sub-grave (una octava abajo) solo para el synth bass: una sola voz senoidal, muy liviana.
     this.sub = new Tone.MonoSynth({
       oscillator: { type: 'sine' },
@@ -200,6 +207,8 @@ export class AudioEngine {
     const b = BASSES[sound] || BASSES.classic;
     this.bassSound = sound;
     this.bassSub = Boolean(b.sub);
+    this.bass808 = b.engine === '808';
+    if (this.bass808) { this.b808.volume.value = -2 + b.vol; return; }
     this.bass.set({
       oscillator: this.oscFor(b.osc),
       filter: { Q: b.Q },
@@ -212,6 +221,7 @@ export class AudioEngine {
 
   /** Toca el bajo (y el sub si el sonido lo usa). */
   playBass(note, dur, time, vel) {
+    if (this.bass808) { this.b808.triggerAttackRelease(note, '8n', time, vel); return; }
     this.bass.triggerAttackRelease(note, dur, time, vel);
     if (this.bassSub) {
       this.sub.triggerAttackRelease(Tone.Frequency(note).transpose(-12).toNote(), dur, time, vel);
@@ -349,12 +359,14 @@ export class AudioEngine {
       const k = keep(new Tone.MembraneSynth({ octaves: 7, pitchDecay: 0.02, envelope: { attack: 0.001, decay: 0.3, sustain: 0 } }).connect(dist));
       const rim = keep(new Tone.MembraneSynth({ octaves: 1, pitchDecay: 0.002, envelope: { decay: 0.04, sustain: 0 }, volume: -6 }).connect(out));
       const h = keep(new Tone.MetalSynth({ envelope: { decay: 0.04 }, harmonicity: 5.1, modulationIndex: 32, resonance: 6000, volume: -26 }).connect(out));
-      const r = keep(new Tone.MetalSynth({ envelope: { decay: 0.6 }, harmonicity: 3.1, modulationIndex: 16, resonance: 4000, volume: -30 }).connect(out));
+      // Hat abierto (ruido con cola) en vez del ride.
+      const of = keep(new Tone.Filter({ frequency: 6500, type: 'highpass' }).connect(out));
+      const r = keep(new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.002, decay: 0.28, sustain: 0 }, volume: -14 }).connect(of));
       return [
         (t, v) => k.triggerAttackRelease('C1', '16n', t, v),
         (t, v) => rim.triggerAttackRelease('A4', '32n', t, v),
         (t, v) => h.triggerAttackRelease('C6', '32n', t, v),
-        (t, v) => r.triggerAttackRelease('C5', '8n', t, v),
+        (t, v) => r.triggerAttackRelease('8n', t, v),
       ];
     }
     if (kit === 'dembow') {
@@ -378,12 +390,14 @@ export class AudioEngine {
       const k = keep(new Tone.MembraneSynth({ octaves: 3, pitchDecay: 0.04, envelope: { attack: 0.003, decay: 0.35, sustain: 0 }, volume: 0 }).connect(out));
       const bf = keep(new Tone.Filter(3000, 'bandpass').connect(out));
       const br = keep(new Tone.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.03, decay: 0.3, sustain: 0 }, volume: -2 }).connect(bf));
-      const ride = keep(new Tone.MetalSynth({ envelope: { decay: 0.8 }, harmonicity: 4.2, modulationIndex: 12, resonance: 5000, volume: -24 }).connect(out));
+      // Hi-hat cerrado suave (ruido filtrado): más natural que el ride metálico.
+      const hf = keep(new Tone.Filter({ frequency: 7500, type: 'highpass' }).connect(out));
+      const hat = keep(new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.002, decay: 0.045, sustain: 0 }, volume: -10 }).connect(hf));
       const rim = keep(new Tone.MembraneSynth({ octaves: 1, pitchDecay: 0.003, envelope: { decay: 0.05, sustain: 0 }, volume: -4 }).connect(out));
       return [
         (t, v) => k.triggerAttackRelease('E1', '8n', t, v),
         (t, v) => br.triggerAttackRelease('8n', t, v),
-        (t, v) => ride.triggerAttackRelease('D5', '8n', t, v),
+        (t, v) => hat.triggerAttackRelease('32n', t, v),
         (t, v) => rim.triggerAttackRelease('B4', '32n', t, v),
       ];
     }
