@@ -85,7 +85,10 @@ export function normalizeState(s) {
   if (!['classic', 'synth'].includes(S.bassSound)) S.bassSound = base.bassSound;
   const r = S.remixOf;
   S.remixOf = r && typeof r.token_id === 'string' && /^\d+$/.test(String(r.remix_price ?? ''))
-    ? { token_id: r.token_id, title: String(r.title || ''), creator: String(r.creator || ''), remix_price: String(r.remix_price) }
+    ? {
+      token_id: r.token_id, title: String(r.title || ''), creator: String(r.creator || ''), remix_price: String(r.remix_price),
+      project_cid: typeof r.project_cid === 'string' ? r.project_cid : null,
+    }
     : null;
   return S;
 }
@@ -165,19 +168,44 @@ export function extendPattern(S, oldLen, newLen) {
 }
 
 /** Genera un patrón aleatorio para una pista. */
+/** Estilos de batería: posiciones de bombo y caja dentro de un compás de 16 pasos. */
+const pick = (n, from) => [...from].sort(() => Math.random() - 0.5).slice(0, n);
+const DRUM_STYLES = [
+  () => ({ kick: [0, 8], snare: [4, 12], ghost: 0.04 }), // backbeat clásico
+  () => ({ kick: [0, 10], snare: [4, 12], ghost: 0.12 }), // breakbeat
+  () => ({ kick: [0, 3, 10], snare: [8], ghost: 0.06 }), // half-time
+  () => ({ kick: [0, 4, 8, 12], snare: [4, 12], ghost: 0 }), // four on the floor
+  () => ({ kick: [0, 4, 8, 12], snare: [3, 6, 11, 14], ghost: 0 }), // dembow
+  () => ({ kick: [0, ...pick(2, [6, 7, 10, 11, 14])], snare: [8], ghost: 0.05 }), // trap
+  () => ({ kick: [0, ...pick(2, [2, 3, 6, 7, 9, 10, 11, 14, 15])], snare: pick(2, [4, 5, 6, 10, 12, 13, 14]), ghost: 0.08 }), // libre
+];
+
 export function randomTrack(t, len, theory) {
   const G = emptyGrid(TRACKS[t].rows);
   const P = emptyGrid(TRACKS[t].rows, 100);
   const vv = () => (Math.random() < 0.3 ? 2 : 1);
   const pp = () => (Math.random() < 0.2 ? PROBS[1 + Math.floor(Math.random() * 3)] : 100);
 
+  // Batería: se elige un estilo al azar (no siempre caja en 2 y 4).
+  const style = DRUM_STYLES[Math.floor(Math.random() * DRUM_STYLES.length)]();
+  const hatMode = Math.floor(Math.random() * 4);
+  const hat = (b) => [
+    () => Math.random() < 0.6, // libre
+    () => b % 2 === 0, // corcheas
+    () => b % 4 === 2, // a contratiempo
+    () => Math.random() < 0.85, // semicorcheas casi seguidas
+  ][hatMode]();
+
   for (let c = 0; c < len; c++) {
     if (t === 0) {
-      if (c % 8 === 0) G[0][c] = 1;
-      if (c % 8 === 4) G[1][c] = 1;
-      if (Math.random() < 0.6) { G[2][c] = c % 4 ? 2 : 1; P[2][c] = pp(); }
+      const b = c % 16; // posición dentro del compás
+      if (style.kick.includes(b)) G[0][c] = 1;
+      if (style.snare.includes(b)) G[1][c] = 1;
+      if (hat(b)) { G[2][c] = b % 4 ? 2 : 1; P[2][c] = pp(); }
       if (Math.random() < 0.08) { G[3][c] = vv(); P[3][c] = pp(); }
-      if (Math.random() < 0.12 && !G[0][c]) { G[0][c] = 2; P[0][c] = pp(); }
+      // Variaciones: bombos y cajas fantasma (suaves) sueltos.
+      if (Math.random() < 0.1 && !G[0][c]) { G[0][c] = 2; P[0][c] = pp(); }
+      if (Math.random() < style.ghost && !G[1][c]) { G[1][c] = 2; P[1][c] = pp(); }
     }
     if (t === 1 && Math.random() < 0.35) {
       const r = Math.random() < 0.5 ? 7 : Math.floor(Math.random() * 8);
@@ -224,4 +252,48 @@ export function challengeDone(S) {
     S.g[2].flat().filter(Boolean).length >= 4 &&
     S.g[3].flat().some(Boolean),
   );
+}
+
+/** Umbral: por debajo de este porcentaje de notas conservadas, el beat puede registrarse como obra original. */
+export const REMIX_MIN_SIMILARITY = 30;
+
+/**
+ * Cuánto del beat original se conserva en el remix: porcentaje de las notas del original que siguen
+ * en el mismo lugar (fila y paso), promediado entre las pistas. Si el remix es más largo, se compara cada vuelta.
+ * Agregar notas no baja la similitud; quitar o mover las del original, sí.
+ * @returns {{ overall: number, tracks: number[], parentNotes: number }}
+ */
+export function remixSimilarity(parent, S) {
+  let total = 0;
+  const tracks = TRACKS.map((_, t) => {
+    let k = 0;
+    let n = 0;
+    parent.g[t].forEach((row, r) => {
+      for (let c = 0; c < parent.len; c++) {
+        if (!row[c]) continue;
+        n++;
+        // ¿Está la nota en alguna vuelta del remix (mismo paso dentro del largo del original)?
+        let found = false;
+        for (let c2 = c % parent.len; c2 < S.len && !found; c2 += parent.len) found = Boolean(S.g[t][r][c2]);
+        if (found) k++;
+      }
+    });
+    total += n;
+    if (!n) return null;
+    // Corrección por azar: con una pista muy llena, muchas notas "coinciden" sin querer.
+    // Se descuenta la coincidencia esperada si las notas del remix estuvieran al azar.
+    let filled = 0;
+    let cells = 0;
+    S.g[t].forEach((row) => { for (let c = 0; c < S.len; c++) { cells++; if (row[c]) filled++; } });
+    const chance = cells ? filled / cells : 0;
+    const observed = k / n;
+    const score = chance >= 1 ? 0 : Math.max(0, (observed - chance) / (1 - chance));
+    return Math.round(score * 100);
+  });
+  // Promedio por pista (no por nota). La batería se muestra pero no cuenta si hay pistas melódicas:
+  // los ritmos se parecen entre sí por naturaleza, y la identidad de un beat está en bajo, lead y acordes.
+  const melodic = tracks.slice(1).filter((v) => v !== null);
+  const measured = melodic.length ? melodic : tracks.filter((v) => v !== null);
+  const overall = measured.length ? Math.round(measured.reduce((a, v) => a + v, 0) / measured.length) : 100;
+  return { overall, tracks, parentNotes: total };
 }

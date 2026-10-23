@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Panel } from './Panel';
 import { useNear } from '../near/NearProvider';
 import { yoctoToNear } from '../near/contract';
 import { CONTRACT_ID, explorerTokenUrl, explorerTxUrl, shortAccount } from '../near/config';
 import { TRACKS } from '../music/theory';
+import { REMIX_MIN_SIMILARITY, parseProjectFile, remixSimilarity } from '../music/patterns';
+import { fetchIpfs } from '../near/ipfs';
 import { collectEmails, nearToYocto, registerBeat, resolveEmails, sha256Hex, toCredits, uploadToIpfs } from '../near/register';
 import { generateFingerprint } from '../fingerprint';
 
@@ -28,7 +30,34 @@ function CreditRows({ rows, setRows, idPrefix }) {
   );
 }
 
-export function RegisterPanel({ title, buildFiles, remixOf, onRegistered }) {
+/** Proyecto del beat original (de IPFS), para medir cuánto conserva el remix. */
+function useParentProject(cid) {
+  const [state, setState] = useState({ cid: null, project: null, error: '' });
+  useEffect(() => {
+    if (!cid || state.cid === cid) return;
+    let alive = true;
+    setState({ cid, project: null, error: '' });
+    fetchIpfs(cid)
+      .then((b) => b.text())
+      .then((t) => alive && setState({ cid, project: parseProjectFile(t), error: '' }))
+      .catch((e) => alive && setState({ cid, project: null, error: e?.message || String(e) }));
+    return () => { alive = false; };
+  }, [cid]); // eslint-disable-line react-hooks/exhaustive-deps
+  return state;
+}
+
+export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, onRegistered }) {
+  const parent = useParentProject(linkedRemix?.project_cid);
+  const similarity = useMemo(
+    () => (parent.project && beat ? remixSimilarity(parent.project, beat) : null),
+    [parent.project, beat],
+  );
+  // Por debajo del umbral se puede registrar como obra original. Sin medición posible, sigue siendo remix.
+  const canDetach = Boolean(similarity && similarity.overall < REMIX_MIN_SIMILARITY);
+  const [asOriginal, setAsOriginal] = useState(false);
+  useEffect(() => { if (!canDetach) setAsOriginal(false); }, [canDetach]);
+  const remixOf = linkedRemix && !(canDetach && asOriginal) ? linkedRemix : null;
+
   const { status, account, accountId, balance, login, refresh, activate, activationError, getAccessToken } = useNear();
   const [mode, setMode] = useState('whole');
   const [whole, setWhole] = useState([]);
@@ -81,7 +110,7 @@ export function RegisterPanel({ title, buildFiles, remixOf, onRegistered }) {
       if (license_uri && /["\\]/.test(license_uri)) throw new Error('El enlace de la licencia no puede tener comillas');
 
       setStep('Grabando una vuelta del beat…');
-      const { wav, project, baseName } = await buildFiles();
+      const { wav, project, baseName } = await buildFiles({ asRemix: Boolean(remixOf) });
 
       setStep('Calculando huellas SHA-256…');
       const [audio_hash, project_hash] = await Promise.all([sha256Hex(wav), sha256Hex(project)]);
@@ -150,6 +179,27 @@ export function RegisterPanel({ title, buildFiles, remixOf, onRegistered }) {
 
       {status === 'active' && (
         <>
+          {linkedRemix && (
+            <div className="remix-banner">
+              <strong>Similitud con el original: {similarity ? `${similarity.overall} %` : parent.error ? 'no se pudo medir' : linkedRemix.project_cid ? 'midiendo…' : 'sin datos'}</strong>
+              {similarity && (
+                <span className="hint">
+                  {TRACKS.map((t, i) => (similarity.tracks[i] === null ? null : `${t.name} ${similarity.tracks[i]} %`)).filter(Boolean).join(' · ')}
+                  {' '}— notas del original que siguen en su lugar.
+                </span>
+              )}
+              {parent.error && <span className="hint">{parent.error}. Se registra como remix.</span>}
+              {similarity && !canDetach && (
+                <span className="hint">Conserva {REMIX_MIN_SIMILARITY} % o más del original: se registra como remix.</span>
+              )}
+              {canDetach && (
+                <label htmlFor="asOriginal" className="switch">
+                  <input id="asOriginal" type="checkbox" role="switch" checked={asOriginal} onChange={(e) => setAsOriginal(e.target.checked)} />
+                  Conserva menos del {REMIX_MIN_SIMILARITY} %: registrar como obra original (sin licencia de remix)
+                </label>
+              )}
+            </div>
+          )}
           {remixOf && (
             <div className="remix-banner">
               <strong>Remix de #{remixOf.token_id} "{remixOf.title}"</strong> de {shortAccount(remixOf.creator)}

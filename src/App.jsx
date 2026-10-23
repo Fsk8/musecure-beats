@@ -3,7 +3,7 @@ import { AudioEngine, loopSeconds } from './audio/engine';
 import { playhead } from './audio/playhead';
 import { KITS, ROOTS, SCALES, TRACKS, VEL, computeTheory } from './music/theory';
 import {
-  challengeDone, emptyGrid, extendPattern, fileSafeName, nextCell, parseProjectFile, projectFile,
+  challengeDone, defaultState, emptyGrid, extendPattern, fileSafeName, nextCell, parseProjectFile, projectFile,
   quantizeTrack, randomTrack,
 } from './music/patterns';
 import { audioBufferToWav, downloadBlob } from './io/files';
@@ -102,7 +102,7 @@ export default function App() {
   function openFromGallery(text, beat) {
     const loaded = parseProjectFile(text);
     if (!window.confirm(`Se reemplazará el beat que tienes abierto por "${beat.title}". Si quieres conservarlo, guárdalo antes. ¿Continuar?`)) return;
-    const link = { token_id: beat.token_id, title: beat.title, creator: beat.creator, remix_price: beat.remix_price };
+    const link = { token_id: beat.token_id, title: beat.title, creator: beat.creator, remix_price: beat.remix_price, project_cid: beat.project_cid };
     loaded.remixOf = link;
     loaded.title = `${beat.title} (remix)`;
     if (engine.playing) { engine.stop(); setPlaying(false); }
@@ -111,6 +111,15 @@ export default function App() {
     setSaveMessage(`Abierto para remixar: #${beat.token_id} "${beat.title}". Al registrarlo quedará como su remix.`);
     setDrawer(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /** Empieza un beat desde cero (sin notas y sin vínculo de remix). */
+  function newBeat() {
+    if (!window.confirm('¿Empezar un beat nuevo desde cero? El beat actual se reemplaza; si quieres conservarlo, guárdalo antes.')) return;
+    if (engine.playing) { engine.stop(); setPlaying(false); }
+    setUndoBuf(null);
+    replaceState({ ...defaultState(), title: 'Nuevo beat', tab: S.tab, emode: S.emode });
+    setSaveMessage('Beat nuevo.');
   }
 
   function handleCell(r, c) {
@@ -198,7 +207,7 @@ export default function App() {
   }
 
   /** Archivos para registrar: una vuelta en WAV y el proyecto en JSON. */
-  async function buildRegisterFiles() {
+  async function buildRegisterFiles({ asRemix = false } = {}) {
     if (engine.playing) { engine.stop(); setPlaying(false); }
     setRecording(true);
     try {
@@ -206,7 +215,8 @@ export default function App() {
       if (!buffer) throw new Error('Grabación cancelada');
       return {
         wav: audioBufferToWav(buffer),
-        project: new Blob([projectFile(S)], { type: 'application/json' }),
+        // Si se registra como obra original, el proyecto publicado no lleva el vínculo de remix.
+        project: new Blob([projectFile(asRemix ? S : { ...S, remixOf: null })], { type: 'application/json' }),
         baseName: fileSafeName(S.title),
       };
     } finally {
@@ -229,7 +239,15 @@ export default function App() {
         <AccountBar />
       </header>
 
+      {S.remixOf && (
+        <div className="remix-strip" role="status">
+          <span>Estás editando un <strong>remix de #{S.remixOf.token_id} "{S.remixOf.title}"</strong>.</span>
+          <button className="mini" onClick={() => setDrawer('register')}>Ver similitud</button>
+        </div>
+      )}
+
       <nav className="side-nav" aria-label="Paneles">
+        <button onClick={newBeat}>+ Nuevo beat</button>
         <button aria-pressed={drawer === 'save'} onClick={() => toggleDrawer('save')}>Guardar y exportar</button>
         <button aria-pressed={drawer === 'register'} onClick={() => toggleDrawer('register')}>
           Registrar en NEAR{S.remixOf ? ` · remix de #${S.remixOf.token_id}` : ''}
@@ -249,7 +267,7 @@ export default function App() {
         lite={lite}
         onLiteChange={setLite}
       >
-        {confirmAll && <ConfirmRandomAll onYes={randomizeAll} onNo={() => setConfirmAll(false)} />}
+        {confirmAll && <ConfirmRandomAll isRemix={Boolean(S.remixOf)} onYes={randomizeAll} onNo={() => setConfirmAll(false)} />}
       </Transport>
 
 
@@ -298,7 +316,7 @@ export default function App() {
       />
       </div>
       <div hidden={drawer !== 'register'}>
-      <RegisterPanel title={S.title} buildFiles={buildRegisterFiles} remixOf={S.remixOf} onRegistered={clearRemix} />
+      <RegisterPanel title={S.title} buildFiles={buildRegisterFiles} remixOf={S.remixOf} beat={S} onRegistered={clearRemix} />
       </div>
       <div hidden={drawer !== 'gallery'}>
       <Gallery onOpenProject={openFromGallery} />

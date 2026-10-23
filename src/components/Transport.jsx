@@ -66,11 +66,13 @@ export function Transport({
   );
 }
 
-export function ConfirmRandomAll({ onYes, onNo }) {
+export function ConfirmRandomAll({ isRemix, onYes, onNo }) {
   return (
     <div className="warn" role="alertdialog" aria-labelledby="warnText">
       <p id="warnText">
-        Esto reemplaza las 4 pistas con un beat nuevo y borra lo que tienes ahora. ¿Seguimos?
+        Esto reemplaza las 4 pistas con un beat nuevo y borra lo que tienes ahora.
+        {isRemix && ' Como es un remix, casi no quedará nada del original: podrás registrarlo como obra nueva, sin pagar licencia.'}
+        {' '}¿Seguimos?
       </p>
       <div className="bar">
         <button className="danger" onClick={onYes}>Sí, cambiar todo</button>
