@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Panel } from './Panel';
 import { useNear } from '../near/NearProvider';
-import { shortAccount } from '../near/config';
+import { CONTRACT_ID, explorerTokenUrl, explorerTxUrl, shortAccount } from '../near/config';
 import { TRACKS } from '../music/theory';
 import { collectEmails, nearToYocto, registerBeat, resolveEmails, sha256Hex, toCredits, uploadToIpfs } from '../near/register';
 import { generateFingerprint } from '../fingerprint';
@@ -221,6 +221,10 @@ export function RegisterPanel({ title, buildFiles }) {
           <strong>¡Registrado! Beat #{result.token_id}: {result.title}</strong>
           <span className="hint">Audio: ipfs://{result.audio_cid}</span>
           <span className="hint">SHA-256 del audio: {result.audio_hash.slice(0, 16)}…</span>
+          <span className="hint">
+            {result.txHash && <><a href={explorerTxUrl(result.txHash)} target="_blank" rel="noreferrer">Ver transacción</a> · </>}
+            <a href={explorerTokenUrl(CONTRACT_ID, result.token_id)} target="_blank" rel="noreferrer">Ver NFT en NearBlocks</a>
+          </span>
           {result.musecure_fingerprint && (
             <span className="hint">Huella MuSecure: {result.musecure_fingerprint.slice(0, 16)}…</span>
           )}

@@ -6,6 +6,9 @@ export const CONTRACT_ID = import.meta.env.VITE_NEAR_CONTRACT || 'musecure-beats
 export const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || '';
 
 export const explorerAccountUrl = (accountId) => `https://testnet.nearblocks.io/address/${accountId}`;
+/** Colección NFT del contrato y un token en particular en NearBlocks. */
+export const explorerNftUrl = (contractId) => `https://testnet.nearblocks.io/nft-token/${contractId}`;
+export const explorerTokenUrl = (contractId, tokenId) => `https://testnet.nearblocks.io/nft-token/${contractId}/${tokenId}`;
 export const explorerTxUrl = (hash) => `https://testnet.nearblocks.io/txns/${hash}`;
 
 /** Cuentas implícitas (64 hex) se acortan para mostrarlas. */

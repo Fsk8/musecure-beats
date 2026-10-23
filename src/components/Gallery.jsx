@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Panel } from './Panel';
 import { useNear } from '../near/NearProvider';
 import { getBeats, yoctoToNear } from '../near/contract';
-import { CONTRACT_ID, explorerAccountUrl, shortAccount } from '../near/config';
+import { CONTRACT_ID, explorerAccountUrl, explorerNftUrl, explorerTokenUrl, shortAccount } from '../near/config';
 import { fetchIpfs, ipfsUrl } from '../near/ipfs';
 import { sha256Hex } from '../near/register';
 
@@ -138,6 +138,8 @@ function BeatCard({ beat: b, playing, onPlay, onOpen }) {
           <Hash label="SHA-256 del proyecto" value={b.project_hash} />
           <Hash label="Huella MuSecure" value={b.musecure_fingerprint} />
           <div className="beat-meta">
+            <a href={explorerTokenUrl(CONTRACT_ID, b.token_id)} target="_blank" rel="noreferrer">NFT en NearBlocks</a>
+            <a href={explorerAccountUrl(b.creator)} target="_blank" rel="noreferrer">Transacciones del autor</a>
             <a href={ipfsUrl(b.audio_cid)} target="_blank" rel="noreferrer">Audio en IPFS</a>
             <a href={ipfsUrl(b.project_cid)} target="_blank" rel="noreferrer">Proyecto en IPFS</a>
             {b.license_uri && <a href={b.license_uri.replace(/^ipfs:\/\//, ipfsUrl(''))} target="_blank" rel="noreferrer">Licencia</a>}
@@ -211,9 +213,11 @@ export function Gallery({ onOpenProject }) {
   return (
     <Panel id="gallery" title="Beats en NEAR" summary={summary}>
       <div className="bar spread">
-        <a className="hint" href={explorerAccountUrl(CONTRACT_ID)} target="_blank" rel="noreferrer">
-          Contrato: {CONTRACT_ID}
-        </a>
+        <span className="hint">
+          <a href={explorerAccountUrl(CONTRACT_ID)} target="_blank" rel="noreferrer">Contrato: {CONTRACT_ID}</a>
+          {' · '}
+          <a href={explorerNftUrl(CONTRACT_ID)} target="_blank" rel="noreferrer">Colección NFT</a>
+        </span>
         <button onClick={load}>Actualizar</button>
       </div>
       {error && <p className="hint">{error}</p>}

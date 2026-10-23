@@ -98,12 +98,19 @@ export function toCredits(rows, what, emailMap = {}) {
   return out;
 }
 
+/** Registra el beat. Devuelve el beat creado y el hash de la transacción (para el explorador). */
 export async function registerBeat(account, args) {
-  return account.callFunction({
+  const outcome = await account.callFunctionRaw({
     contractId: CONTRACT_ID,
     methodName: 'register_beat',
     args: { args },
     gas: GAS,
     deposit: 0n,
   });
+  const failure = outcome?.status?.Failure;
+  if (failure) throw new Error(`El contrato rechazó el registro: ${JSON.stringify(failure)}`);
+  const value = outcome?.status?.SuccessValue;
+  // base64 → bytes → UTF-8 (los títulos pueden tener tildes y ñ).
+  const beat = value ? JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(value), (c) => c.charCodeAt(0)))) : null;
+  return { ...beat, txHash: outcome?.transaction?.hash || outcome?.transaction_outcome?.id || null };
 }
