@@ -2,6 +2,10 @@
 import { CONTRACT_ID } from './config';
 
 export const getBeats = (provider, limit = 12) => provider.callFunction(CONTRACT_ID, 'get_beats', { limit });
+export const hasLease = (provider, tokenId, accountId) =>
+  provider.callFunction(CONTRACT_ID, 'has_lease', { token_id: tokenId, account_id: accountId });
+export const getOwnerEarnings = (provider, accountId) =>
+  provider.callFunction(CONTRACT_ID, 'get_owner_earnings', { account_id: accountId });
 export const getTotalBeats = (provider) => provider.callFunction(CONTRACT_ID, 'total_beats', {});
 
 const YOCTO_PER_NEAR = 10n ** 24n;

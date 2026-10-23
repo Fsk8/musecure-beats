@@ -135,3 +135,4 @@ button.mini{padding:2px 6px;font-size:11px}
 .ok-text{color:var(--t1);font-size:12px}
 .beat-list{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
 .remix-banner{display:grid;gap:4px;border:1px solid var(--t3);border-radius:8px;padding:8px 10px}
+.lease-box{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}

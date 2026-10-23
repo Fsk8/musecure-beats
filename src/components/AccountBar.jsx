@@ -1,6 +1,50 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNear } from '../near/NearProvider';
-import { shortAccount } from '../near/config';
+import { explorerTxUrl, shortAccount } from '../near/config';
+import { getOwnerEarnings, yoctoToNear } from '../near/contract';
+import { payContract } from '../near/register';
+
+/** Ganancias como dueño de NFTs (ventas de licencias, apoyos, remixes): se acumulan en el contrato hasta retirarlas. */
+function Earnings() {
+  const { provider, account, accountId, refresh } = useNear();
+  const [earned, setEarned] = useState('0');
+  const [busy, setBusy] = useState(false);
+  const [tx, setTx] = useState('');
+  const [err, setErr] = useState('');
+
+  const load = useCallback(() => {
+    if (!accountId) return;
+    getOwnerEarnings(provider, accountId).then(setEarned).catch(() => {});
+  }, [provider, accountId]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    window.addEventListener('msb:beats-changed', load);
+    return () => window.removeEventListener('msb:beats-changed', load);
+  }, [load]);
+
+  async function withdraw() {
+    setBusy(true);
+    setErr('');
+    try {
+      setTx(await payContract(account, 'withdraw', {}));
+      setEarned('0');
+      setTimeout(refresh, 2000); // la transferencia llega en el bloque siguiente
+    } catch (e) {
+      setErr(e?.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (tx) return <a className="pill ok" href={explorerTxUrl(tx)} target="_blank" rel="noreferrer">✓ Retirado · ver transacción</a>;
+  if (earned === '0') return null;
+  return (
+    <button className="pill ok" onClick={withdraw} disabled={busy} title={err || 'Retirar tus ganancias como dueño a tu cuenta'}>
+      {busy ? 'Retirando…' : `Ganancias: ${yoctoToNear(earned)} Ⓝ · Retirar`}
+    </button>
+  );
+}
 
 export function AccountBar() {
   const { status, accountId, balance, email, error, activationError, activate, login, logout } = useNear();
@@ -46,6 +90,7 @@ export function AccountBar() {
         <span className="pill">Creando tu cuenta NEAR…</span>
       )}
       {status === 'active' && <span className="pill ok">{balance?.toFixed(3)} Ⓝ</span>}
+      {status === 'active' && <Earnings />}
       {status === 'activating' && <span className="pill">Activando tu cuenta…</span>}
       {status === 'inactive' && (
         <button className="pill warn" onClick={activate} title={activationError || 'Activar cuenta'}>

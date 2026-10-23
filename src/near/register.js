@@ -99,6 +99,30 @@ export function toCredits(rows, what, emailMap = {}) {
 }
 
 /**
+ * Llama a un método del contrato (licencias, apoyos, cobros). `depositYocto` es lo que se paga ("0" si nada).
+ * Devuelve el hash de la transacción.
+ */
+export async function payContract(account, methodName, args, depositYocto = '0') {
+  const outcome = await account.callFunctionRaw({
+    contractId: CONTRACT_ID,
+    methodName,
+    args,
+    gas: GAS * 2n, // claim puede transferir a varios acreditados
+    deposit: BigInt(depositYocto),
+  });
+  const failure = outcome?.status?.Failure;
+  if (failure) throw new Error(contractError(failure));
+  return outcome?.transaction?.hash || outcome?.transaction_outcome?.id || null;
+}
+
+/** Extrae el mensaje del contrato (los require! en español) de un error de ejecución. */
+export function contractError(failure) {
+  const text = JSON.stringify(failure);
+  const m = text.match(/Smart contract panicked: ([^"\\]+)/);
+  return m ? m[1] : `El contrato rechazó la operación: ${text}`;
+}
+
+/**
  * Registra el beat. Si `remixOf` viene, se registra como remix de ese beat pagando su licencia de remix.
  * Devuelve el beat creado y el hash de la transacción (para el explorador).
  */
@@ -111,7 +135,7 @@ export async function registerBeat(account, args, remixOf = null) {
     deposit: remixOf ? BigInt(remixOf.remix_price || '0') : 0n,
   });
   const failure = outcome?.status?.Failure;
-  if (failure) throw new Error(`El contrato rechazó el registro: ${JSON.stringify(failure)}`);
+  if (failure) throw new Error(contractError(failure));
   const value = outcome?.status?.SuccessValue;
   // base64 → bytes → UTF-8 (los títulos pueden tener tildes y ñ).
   const beat = value ? JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(value), (c) => c.charCodeAt(0)))) : null;
