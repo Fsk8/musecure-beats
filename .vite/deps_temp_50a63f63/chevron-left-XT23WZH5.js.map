@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../node_modules/.pnpm/@reown+appkit-ui@1.7.8_@types+react@19.3.0_bufferutil@4.1.0_encoding@0.1.13_react@18.3._debcbd0202bd91206f49437de8296dfd/node_modules/@reown/appkit-ui/src/assets/svg/chevron-left.ts"],
-  "sourcesContent": [null],
-  "mappings": ";;;;;;;;;;;;;;;;;;AAAA;IAAAA,eAAA;IAAAA,eAAA;AAEO,IAAM,iBAAiB;;;;;;;;",
-  "names": ["import_dist"]
-}

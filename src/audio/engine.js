@@ -1,6 +1,7 @@
 // Motor de audio con Tone.js. Lee el estado actual en cada paso a través de getState/getTheory.
 import * as Tone from 'tone';
 import { TRACKS, VEL } from '../music/theory';
+import { BASSES, LEADS, PADS, liteOsc } from './presets';
 
 /** Segundos que dura una vuelta del beat. */
 export const loopSeconds = (S) => (S.len * 60) / S.bpm / 4;
@@ -188,77 +189,52 @@ export class AudioEngine {
     this.applied = { bassSound: S.bassSound, pad: S.pad, bpm: S.bpm, swing: S.swing, cut: S.cut, wave: S.wave, kit: S.kit, arp: S.arp, mix: S.mix, silent };
   }
 
-  applyBass(sound) {
-    this.bassSound = sound;
-    if (sound === 'synth') {
-      // Synth bass: dos sierras desafinadas, filtro resonante con barrido y un poco de glide.
-      this.bass.set({
-        oscillator: this.lite ? { type: 'sawtooth' } : { type: 'fatsawtooth', count: 2, spread: 18 },
-        filter: { Q: 6 },
-        envelope: { attack: 0.003, decay: 0.25, sustain: 0.35, release: 0.1 },
-        filterEnvelope: { attack: 0.002, decay: 0.22, sustain: 0.1, baseFrequency: 90, octaves: 3.6 },
-        portamento: 0.03,
-        volume: -4,
-      });
-    } else {
-      this.bass.set({
-        oscillator: { type: 'sawtooth' },
-        filter: { Q: 2 },
-        envelope: { attack: 0.005, decay: 0.2, sustain: 0.4, release: 0.15 },
-        filterEnvelope: { attack: 0.005, decay: 0.15, sustain: 0.2, baseFrequency: 120, octaves: 2.6 },
-        portamento: 0,
-        volume: 0,
-      });
-    }
+  /** Oscilador según modo liviano y tempo rápido (menos voces desafinadas). */
+  oscFor(osc) {
+    if (this.lite) return liteOsc(osc);
+    if (this.fast && osc.count > 2) return { ...osc, count: 2 };
+    return osc;
   }
 
-  /** Toca el bajo (y el sub si corresponde). */
+  applyBass(sound) {
+    const b = BASSES[sound] || BASSES.classic;
+    this.bassSound = sound;
+    this.bassSub = Boolean(b.sub);
+    this.bass.set({
+      oscillator: this.oscFor(b.osc),
+      filter: { Q: b.Q },
+      envelope: b.env,
+      filterEnvelope: b.fenv,
+      portamento: b.porta,
+      volume: b.vol,
+    });
+  }
+
+  /** Toca el bajo (y el sub si el sonido lo usa). */
   playBass(note, dur, time, vel) {
     this.bass.triggerAttackRelease(note, dur, time, vel);
-    if (this.bassSound === 'synth') {
+    if (this.bassSub) {
       this.sub.triggerAttackRelease(Tone.Frequency(note).transpose(-12).toNote(), dur, time, vel);
     }
   }
 
   applyPad(sound) {
-    if (sound === 'dreamy') {
-      // Sierras desafinadas, ataque lento y cola larga, filtradas y con chorus.
-      this.pad.set({
-        oscillator: this.lite ? { type: 'sawtooth' } : { type: 'fatsawtooth', count: this.fast ? 2 : 3, spread: 28 },
-        envelope: { attack: 0.35, decay: 0.6, sustain: 0.75, release: this.fast ? 1.2 : 2.2 },
-        volume: -16,
-      });
-      this.padFilter.frequency.value = 1600;
-      this.padChorus.wet.value = this.lite ? 0 : 0.6;
-    } else {
-      this.pad.set({
-        oscillator: this.lite ? { type: 'sine' } : { type: 'fatsine', count: 2, spread: 12 },
-        envelope: { attack: 0.08, decay: 0.3, sustain: 0.6, release: 0.8 },
-        volume: -6,
-      });
-      this.padFilter.frequency.value = 18000;
-      this.padChorus.wet.value = 0;
-    }
+    const p = PADS[sound] || PADS.dreamy;
+    // A tempos rápidos los acordes se encadenan: colas más cortas para no saturar.
+    const release = this.fast ? Math.min(p.env.release, 1.2) : p.env.release;
+    this.pad.set({ oscillator: this.oscFor(p.osc), envelope: { ...p.env, release }, volume: p.vol });
+    this.padFilter.frequency.value = p.filter;
+    this.padChorus.wet.value = this.lite ? 0 : p.chorus;
   }
 
   get padLength() {
-    return this.getState().pad === 'dreamy' ? '2n' : '4n';
+    return (PADS[this.getState().pad] || PADS.dreamy).len;
   }
 
   applyWave(wave) {
-    if (wave === 'saw') {
-      this.lead.set({
-        oscillator: this.lite ? { type: 'sawtooth' } : { type: 'fatsawtooth', count: 3, spread: 24 },
-        envelope: { attack: 0.005, decay: 0.25, sustain: 0.3, release: 0.3 },
-      });
-      this.leadFilter.frequency.value = 2600;
-    } else {
-      this.lead.set({
-        oscillator: { type: 'triangle' },
-        envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.4 },
-      });
-      this.leadFilter.frequency.value = 18000;
-    }
+    const l = LEADS[wave] || LEADS.tri;
+    this.lead.set({ oscillator: this.oscFor(l.osc), envelope: l.env, volume: -8 + l.vol });
+    this.leadFilter.frequency.value = l.filter;
   }
 
   /**
@@ -335,6 +311,82 @@ export class AudioEngine {
       out = keep(new Tone.Distortion({ distortion: 0.35, wet: 0.6, oversample: '2x' }).connect(lp));
     }
 
+    if (kit === 'trap') {
+      // Bombo 808 largo, caja seca, hi-hats cortos y clap con capas.
+      const k = keep(new Tone.MembraneSynth({ octaves: 4, pitchDecay: 0.12, envelope: { attack: 0.001, decay: 1.3, sustain: 0, release: 0.3 } }).connect(out));
+      const sf = keep(new Tone.Filter(2200, 'highpass').connect(out));
+      const s = keep(new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.12, sustain: 0 }, volume: -4 }).connect(sf));
+      const hf = keep(new Tone.Filter(9000, 'highpass').connect(out));
+      const h = keep(new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.025, sustain: 0 }, volume: -12 }).connect(hf));
+      const cf = keep(new Tone.Filter(1500, 'bandpass').connect(out));
+      const c = keep(new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.2, sustain: 0 }, volume: -2 }).connect(cf));
+      return [
+        (t, v) => k.triggerAttackRelease('A0', '2n', t, v),
+        (t, v) => s.triggerAttackRelease('16n', t, v),
+        (t, v) => h.triggerAttackRelease('32n', t, v),
+        (t, v) => { c.triggerAttackRelease('16n', t, v); c.triggerAttackRelease('16n', t + 0.01, v * 0.8); c.triggerAttackRelease('16n', t + 0.022, v * 0.6); },
+      ];
+    }
+    if (kit === 'house') {
+      // Bombo con pegada, clap, hi-hat abierto y shaker.
+      const k = keep(new Tone.MembraneSynth({ octaves: 5, pitchDecay: 0.03, envelope: { attack: 0.001, decay: 0.4, sustain: 0 } }).connect(out));
+      const cf = keep(new Tone.Filter(1100, 'bandpass').connect(out));
+      const c = keep(new Tone.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.002, decay: 0.18, sustain: 0 }, volume: -2 }).connect(cf));
+      const of = keep(new Tone.Filter(7000, 'highpass').connect(out));
+      const o = keep(new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.002, decay: 0.25, sustain: 0 }, volume: -16 }).connect(of));
+      const shf = keep(new Tone.Filter(5000, 'bandpass').connect(out));
+      const sh = keep(new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.01, decay: 0.06, sustain: 0 }, volume: -12 }).connect(shf));
+      return [
+        (t, v) => k.triggerAttackRelease('C1', '8n', t, v),
+        (t, v) => { c.triggerAttackRelease('16n', t, v); c.triggerAttackRelease('16n', t + 0.015, v * 0.7); },
+        (t, v) => o.triggerAttackRelease('8n', t, v),
+        (t, v) => sh.triggerAttackRelease('32n', t, v),
+      ];
+    }
+    if (kit === 'techno') {
+      // Bombo duro y corto, rimshot, hat metálico y ride.
+      const dist = keep(new Tone.Distortion({ distortion: 0.25, wet: 0.4, oversample: 'none' }).connect(out));
+      const k = keep(new Tone.MembraneSynth({ octaves: 7, pitchDecay: 0.02, envelope: { attack: 0.001, decay: 0.3, sustain: 0 } }).connect(dist));
+      const rim = keep(new Tone.MembraneSynth({ octaves: 1, pitchDecay: 0.002, envelope: { decay: 0.04, sustain: 0 }, volume: -6 }).connect(out));
+      const h = keep(new Tone.MetalSynth({ envelope: { decay: 0.04 }, harmonicity: 5.1, modulationIndex: 32, resonance: 6000, volume: -26 }).connect(out));
+      const r = keep(new Tone.MetalSynth({ envelope: { decay: 0.6 }, harmonicity: 3.1, modulationIndex: 16, resonance: 4000, volume: -30 }).connect(out));
+      return [
+        (t, v) => k.triggerAttackRelease('C1', '16n', t, v),
+        (t, v) => rim.triggerAttackRelease('A4', '32n', t, v),
+        (t, v) => h.triggerAttackRelease('C6', '32n', t, v),
+        (t, v) => r.triggerAttackRelease('C5', '8n', t, v),
+      ];
+    }
+    if (kit === 'dembow') {
+      // Bombo redondo, caja con chasquido, hi-hat y timbal.
+      const k = keep(new Tone.MembraneSynth({ octaves: 5, pitchDecay: 0.06, envelope: { attack: 0.001, decay: 0.5, sustain: 0 } }).connect(out));
+      const sf = keep(new Tone.Filter(1800, 'highpass').connect(out));
+      const s = keep(new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.09, sustain: 0 }, volume: -3 }).connect(sf));
+      const sb = keep(new Tone.MembraneSynth({ octaves: 1.5, pitchDecay: 0.01, envelope: { decay: 0.08, sustain: 0 }, volume: -10 }).connect(out));
+      const hf = keep(new Tone.Filter(8000, 'highpass').connect(out));
+      const h = keep(new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.035, sustain: 0 }, volume: -14 }).connect(hf));
+      const tb = keep(new Tone.MembraneSynth({ octaves: 1.2, pitchDecay: 0.02, envelope: { decay: 0.18, sustain: 0 }, volume: -6 }).connect(out));
+      return [
+        (t, v) => k.triggerAttackRelease('D1', '8n', t, v),
+        (t, v) => { s.triggerAttackRelease('16n', t, v); sb.triggerAttackRelease('E3', '16n', t, v); },
+        (t, v) => h.triggerAttackRelease('32n', t, v),
+        (t, v) => tb.triggerAttackRelease('A3', '16n', t, v),
+      ];
+    }
+    if (kit === 'jazz') {
+      // Escobillas: bombo suave, caja con ruido largo, ride y aro.
+      const k = keep(new Tone.MembraneSynth({ octaves: 3, pitchDecay: 0.04, envelope: { attack: 0.003, decay: 0.35, sustain: 0 }, volume: 0 }).connect(out));
+      const bf = keep(new Tone.Filter(3000, 'bandpass').connect(out));
+      const br = keep(new Tone.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.03, decay: 0.3, sustain: 0 }, volume: -2 }).connect(bf));
+      const ride = keep(new Tone.MetalSynth({ envelope: { decay: 0.8 }, harmonicity: 4.2, modulationIndex: 12, resonance: 5000, volume: -24 }).connect(out));
+      const rim = keep(new Tone.MembraneSynth({ octaves: 1, pitchDecay: 0.003, envelope: { decay: 0.05, sustain: 0 }, volume: -4 }).connect(out));
+      return [
+        (t, v) => k.triggerAttackRelease('E1', '8n', t, v),
+        (t, v) => br.triggerAttackRelease('8n', t, v),
+        (t, v) => ride.triggerAttackRelease('D5', '8n', t, v),
+        (t, v) => rim.triggerAttackRelease('B4', '32n', t, v),
+      ];
+    }
     if (kit === 'classic') {
       const k = keep(new Tone.MembraneSynth({ octaves: 6, pitchDecay: 0.04 }).connect(out));
       const s = keep(new Tone.NoiseSynth({ envelope: { attack: 0.001, decay: 0.18, sustain: 0 }, volume: -8 }).connect(out));

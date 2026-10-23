@@ -36,6 +36,11 @@ export const KITS = {
   acoustic: { name: 'Acústico', rows: ['Bombo', 'Caja', 'Hi-hat', 'Tom'] },
   lofi: { name: 'Lo-fi', rows: ['Bombo lo-fi', 'Caja lo-fi', 'Hat lo-fi', 'Rim lo-fi'] },
   andino: { name: 'Andino', rows: ['Bombo legüero', 'Chajchas', 'Palmas', 'Charango'] },
+  trap: { name: 'Trap', rows: ['Bombo 808 largo', 'Caja trap', 'Hi-hat', 'Clap'] },
+  house: { name: 'House', rows: ['Bombo house', 'Clap', 'Hat abierto', 'Shaker'] },
+  techno: { name: 'Techno', rows: ['Bombo techno', 'Rim', 'Hat metálico', 'Ride'] },
+  dembow: { name: 'Dembow', rows: ['Bombo', 'Caja dembow', 'Hi-hat', 'Timbal'] },
+  jazz: { name: 'Jazz (escobillas)', rows: ['Bombo suave', 'Escobilla', 'Ride', 'Aro'] },
 };
 
 /** Velocidad por valor de celda: 0 apagado, 1 fuerte, 2 suave. */

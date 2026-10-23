@@ -1,5 +1,6 @@
 // Estado del beat y operaciones sobre patrones (sin audio ni UI).
-import { MAX_STEPS, PROBS, TRACKS } from './theory';
+import { KITS, MAX_STEPS, PROBS, TRACKS } from './theory';
+import { BASSES, LEADS, PADS } from '../audio/presets';
 
 export const STORAGE_KEY = 'msb2';
 
@@ -81,8 +82,10 @@ export function normalizeState(s) {
     const v = s.oct?.[i];
     return Number.isInteger(v) && v >= -2 && v <= 2 ? v : d;
   });
-  if (!['dreamy', 'soft'].includes(S.pad)) S.pad = base.pad;
-  if (!['classic', 'synth'].includes(S.bassSound)) S.bassSound = base.bassSound;
+  if (!PADS[S.pad]) S.pad = base.pad;
+  if (!BASSES[S.bassSound]) S.bassSound = base.bassSound;
+  if (!LEADS[S.wave]) S.wave = base.wave;
+  if (!KITS[S.kit]) S.kit = base.kit;
   const r = S.remixOf;
   S.remixOf = r && typeof r.token_id === 'string' && /^\d+$/.test(String(r.remix_price ?? ''))
     ? {

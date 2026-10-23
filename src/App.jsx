@@ -8,6 +8,7 @@ import {
 } from './music/patterns';
 import { audioBufferToWav, downloadBlob } from './io/files';
 import { useBeatState } from './state/useBeatState';
+import { BASSES, LEADS, PADS } from './audio/presets';
 import { Transport, ConfirmRandomAll } from './components/Transport';
 import { SoundPanel } from './components/SoundPanel';
 import { Mixer } from './components/Mixer';
@@ -154,9 +155,9 @@ export default function App() {
     const any = (list) => list[Math.floor(Math.random() * list.length)];
     mutate((d) => {
       d.kit = any(Object.keys(KITS));
-      d.wave = any(['tri', 'saw']);
-      d.bassSound = any(['classic', 'synth']);
-      d.pad = any(['dreamy', 'soft']);
+      d.wave = any(Object.keys(LEADS));
+      d.bassSound = any(Object.keys(BASSES));
+      d.pad = any(Object.keys(PADS));
       d.arp = any(['off', 'off', 'up', 'down', 'updown', 'rand']);
     });
   }

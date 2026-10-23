@@ -1,12 +1,13 @@
 import { KITS, ROOTS, SCALES } from '../music/theory';
 import { Panel } from './Panel';
+import { BASSES, LEADS, PADS } from '../audio/presets';
 
 export function SoundPanel({ S, mutate }) {
   const set = (key, cast = (v) => v) => (e) => mutate((d) => { d[key] = cast(e.target.value); });
 
   return (
     <Panel id="sound" title="Sonido"
-      summary={`${KITS[S.kit].name} · ${ROOTS[S.root][1]} ${SCALES[S.scale][0].toLowerCase()} · acordes ${S.pad === 'dreamy' ? 'dreamy' : 'suaves'}`}>
+      summary={`${KITS[S.kit].name} · ${ROOTS[S.root][1]} ${SCALES[S.scale][0].toLowerCase()} · acordes ${(PADS[S.pad] || PADS.dreamy).name.toLowerCase()}`}>
       <div className="fields">
         <label htmlFor="kit">
           Kit
@@ -35,22 +36,19 @@ export function SoundPanel({ S, mutate }) {
         <label htmlFor="wave">
           Lead
           <select id="wave" value={S.wave} onChange={set('wave')}>
-            <option value="tri">Suave (triangular)</option>
-            <option value="saw">Saw (sierra)</option>
+            {Object.entries(LEADS).map(([k, p]) => <option key={k} value={k}>{p.name}</option>)}
           </select>
         </label>
         <label htmlFor="bassSound">
           Bajo
           <select id="bassSound" value={S.bassSound} onChange={set('bassSound')}>
-            <option value="classic">Clásico (sierra)</option>
-            <option value="synth">Synth bass (con sub)</option>
+            {Object.entries(BASSES).map(([k, p]) => <option key={k} value={k}>{p.name}</option>)}
           </select>
         </label>
         <label htmlFor="pad">
           Sonido acordes
           <select id="pad" value={S.pad} onChange={set('pad')}>
-            <option value="dreamy">Dreamy (pad)</option>
-            <option value="soft">Suave (el anterior)</option>
+            {Object.entries(PADS).map(([k, p]) => <option key={k} value={k}>{p.name}</option>)}
           </select>
         </label>
         <label htmlFor="arp">
