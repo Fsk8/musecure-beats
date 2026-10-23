@@ -4,7 +4,9 @@ export function Transport({
   S, mutate, playing, onTogglePlay, onLenChange, onRandomTrack, onAskRandomAll, onClearTrack, lite, onLiteChange, children,
 }) {
   return (
-    <section className="panel">
+    <>
+    {/* Barra fija: queda visible al bajar por la página */}
+    <div className="transport-bar" role="toolbar" aria-label="Reproducción">
       <div className="bar">
         <button id="play" className="primary" onClick={onTogglePlay}>
           {playing ? '■ Parar' : '▶ Tocar'}
@@ -25,6 +27,11 @@ export function Transport({
             onChange={(e) => onLiteChange(e.target.checked)} />
           Modo liviano
         </label>
+      </div>
+    </div>
+
+    <section className="panel">
+      <div className="bar">
         <label htmlFor="swing">
           Swing
           <input id="swing" type="range" min="0" max="70" value={S.swing}
@@ -40,7 +47,6 @@ export function Transport({
           </select>
         </label>
       </div>
-
       <div className="master">
         <strong>Filtro maestro</strong>
         <input id="cut" type="range" min="0" max="100" value={S.cut} aria-label="Filtro maestro"
@@ -56,6 +62,7 @@ export function Transport({
       </div>
       {children}
     </section>
+    </>
   );
 }
 

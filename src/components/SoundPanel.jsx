@@ -7,7 +7,7 @@ export function SoundPanel({ S, mutate }) {
   return (
     <Panel id="sound" title="Sonido"
       summary={`${KITS[S.kit].name} · ${ROOTS[S.root][1]} ${SCALES[S.scale][0].toLowerCase()} · acordes ${S.pad === 'dreamy' ? 'dreamy' : 'suaves'}`}>
-      <div className="bar">
+      <div className="fields">
         <label htmlFor="kit">
           Kit
           <select id="kit" value={S.kit} onChange={set('kit')}>

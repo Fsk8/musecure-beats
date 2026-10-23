@@ -5,7 +5,8 @@
   --cell:#e3e6f0; --beat:#c9cee0; --play:#ffb020;
   --t0:#e0563f; --t1:#1f9e74; --t2:#3b5bdb; --t3:#a24bd0;
   --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
-  --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --sans:"Manrope", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#12141f; --panel:#1b1e2e; --ink:#eceef7; --muted:#9aa0bd; --line:#2c3047;
@@ -17,16 +18,16 @@
   --t0:#ff6e57; --t1:#34c895; --t2:#6f8cff; --t3:#c27bf0; color-scheme:dark}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;font-size:14px;background:var(--bg);color:var(--ink);font-family:var(--mono);
+body{margin:0;font-size:14px;background:var(--bg);color:var(--ink);font-family:var(--sans);
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px}
 .wrap{max-width:980px;margin:0 auto;display:grid;gap:16px}
 header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px}
 h1{font-family:var(--display);font-weight:800;font-size:clamp(28px,5vw,44px);margin:0;letter-spacing:-.02em}
 h1 span{color:var(--t0)}
 .sub{color:var(--muted);font-size:13px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:12px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:10px;min-width:0}
 .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-button,select{font-family:var(--mono);font-size:14px;border:1px solid var(--line);background:var(--cell);color:var(--ink);border-radius:10px;padding:9px 13px;cursor:pointer}
+button,select{font-family:var(--sans);font-size:13px;font-weight:500;border:1px solid var(--line);background:var(--cell);color:var(--ink);border-radius:9px;padding:7px 11px;cursor:pointer}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--t2);outline-offset:2px}
 button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600;min-width:110px}
 button:disabled{opacity:.55;cursor:not-allowed}
@@ -80,7 +81,7 @@ button.danger{background:var(--t0);border-color:var(--t0);color:#fff;font-weight
 .switch input::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--panel);transition:transform .15s}
 .switch input:checked{background:var(--t1)}
 .switch input:checked::after{transform:translateX(14px)}
-input.text{font-family:var(--mono);font-size:14px;background:var(--cell);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:min(220px,60vw)}
+input.text{font-family:var(--sans);font-size:13px;background:var(--cell);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:min(220px,60vw)}
 button.primary-soft{border-color:var(--t1);color:var(--t1);font-weight:600}
 .progress{height:6px;border-radius:999px;background:var(--cell);overflow:hidden}
 .progress span{display:block;height:100%;background:var(--t1);transition:width .1s linear}
@@ -157,3 +158,31 @@ button.mini{padding:2px 6px;font-size:11px}
   .drawer-backdrop{display:none}
 }
 @media (max-width:1279px){.drawer-backdrop.show{opacity:1;pointer-events:auto}}
+
+/* Tipografía: números y hashes en monoespaciada */
+.num,code,.cell,.chip{font-family:var(--mono)}
+.label{font-family:var(--sans);font-weight:700}
+
+/* Barra de reproducción fija */
+.transport-bar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--panel) 92%,transparent);
+  backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-inline:-2px}
+.transport-bar .bar{gap:8px 14px}
+.transport-bar button.primary{min-width:96px}
+.transport-bar input[type=range]{width:96px}
+
+/* Selectores de sonido compactos, en grilla con etiqueta arriba */
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 10px}
+.fields label{flex-direction:column;align-items:stretch;gap:3px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;font-weight:700}
+.fields select{width:100%;padding:5px 8px;font-size:13px;text-transform:none;letter-spacing:0;font-weight:500}
+
+/* Mezclador compacto */
+.mixer{gap:8px}
+.ch{padding:8px;gap:6px;border-top-width:3px}
+.ch .fx{gap:3px 8px;font-size:11px}
+.ch .fx input[type=range]{height:14px}
+.mute,.solo{padding:2px 7px;font-size:11px;min-width:24px;border-radius:6px}
+.oct{gap:4px;font-size:11px}
+.oct button{padding:0 7px;font-size:13px}
+.transport-bar{top:8px}
+.transport-bar select{padding:5px 8px}
+.transport-bar label{gap:6px}
