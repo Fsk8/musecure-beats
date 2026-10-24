@@ -302,6 +302,150 @@ function Cover({ beat: b }) {
   return <img className="cover" src={src} alt={`NFT #${b.token_id} cover: ${b.title}`} loading="lazy" />;
 }
 
+/**
+ * Buy the NFT itself (the exclusive). The buyer becomes the owner: exclusive license, owner earnings,
+ * and control of the NFT's own account on other chains (and its MuSecure certificate). 10 % goes to the authors.
+ */
+function BuyBox({ beat: b, onChanged }) {
+  const { status, account, accountId, balance, login, refresh } = useNear();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [tx, setTx] = useState('');
+
+  if (!b.sale_price && !tx) return null;
+  if (tx) {
+    return (
+      <div className="success" role="status">
+        <strong>You now own NFT #{b.token_id}.</strong>
+        <span className="hint">
+          You hold the exclusive, receive the owner earnings and control the NFT's account on Monad (and its MuSecure certificate).
+          {' '}<a href={explorerTxUrl(tx)} target="_blank" rel="noreferrer">View transaction</a>
+        </span>
+      </div>
+    );
+  }
+  const price = yoctoToNear(b.sale_price);
+  const royalty = yoctoToNear((BigInt(b.sale_price) * 1000n) / 10000n);
+
+  async function buy() {
+    setError('');
+    if (balance !== null && Number(yoctoToNear(b.sale_price, 6)) + 0.01 > balance) {
+      setError(`Not enough balance: the NFT costs ${price} Ⓝ and you have ${balance.toFixed(3)} Ⓝ`);
+      return;
+    }
+    if (!window.confirm(
+      `Buy NFT #${b.token_id} "${b.title}" for ${price} Ⓝ?\n\n`
+      + `You become the owner: exclusive license, owner earnings, and control of the NFT's account on Monad. `
+      + `${royalty} Ⓝ (10 %) goes to the authors. New non-exclusive licenses close; existing ones remain valid.`,
+    )) return;
+    setBusy(true);
+    try {
+      setTx(await payContract(account, 'buy', { token_id: b.token_id }, b.sale_price));
+      refresh();
+      onChanged();
+    } catch (e) {
+      setError(e?.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  let action;
+  if (accountId && accountId === b.owner_id) action = <span className="hint">Your NFT is listed for {price} Ⓝ.</span>;
+  else if (status === 'signed-out') action = <button onClick={login}>Sign in to buy the NFT ({price} Ⓝ)</button>;
+  else if (status !== 'active') action = <span className="hint">Activate your account to buy the NFT.</span>;
+  else action = <button className="primary" onClick={buy} disabled={busy}>{busy ? 'Buying…' : `Buy NFT (exclusive) · ${price} Ⓝ`}</button>;
+
+  return (
+    <div className="lease-box">
+      {action}
+      <span className="hint">10 % resale royalty to the authors · the NFT's Monad account moves to the buyer</span>
+      {error && <span className="hint warn-text">{error}</span>}
+    </div>
+  );
+}
+
+/** Owner controls: sell the NFT, and set remix and non-exclusive license prices. */
+function OwnerBox({ beat: b, onChanged }) {
+  const { account, accountId } = useNear();
+  const [salePrice, setSalePrice] = useState(b.sale_price ? yoctoToNear(b.sale_price, 6) : '1');
+  const [remixPrice, setRemixPrice] = useState(yoctoToNear(b.remix_price, 6));
+  const [remixAllowed, setRemixAllowed] = useState(b.remix_allowed);
+  const [leasePrice, setLeasePrice] = useState(yoctoToNear(b.lease_price, 6));
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState(null);
+  if (!accountId || accountId !== b.owner_id) return null;
+
+  async function run(label, method, args) {
+    setBusy(label);
+    setMsg(null);
+    try {
+      const hash = await payContract(account, method, args);
+      setMsg({ ok: true, text: `${label}: done`, hash });
+      onChanged();
+    } catch (e) {
+      setMsg({ ok: false, text: e?.message || String(e) });
+    } finally {
+      setBusy('');
+    }
+  }
+
+  return (
+    <div className="owner-box">
+      <span className="label">Owner controls</span>
+      <div className="lease-box">
+        {b.sale_price ? (
+          <>
+            <span>Listed for <strong>{yoctoToNear(b.sale_price)} Ⓝ</strong></span>
+            <button onClick={() => run('Cancel listing', 'list_for_sale', { token_id: b.token_id, price: null })} disabled={Boolean(busy)}>
+              {busy === 'Cancel listing' ? 'Cancelling…' : 'Cancel listing'}
+            </button>
+          </>
+        ) : (
+          <>
+            <label htmlFor={`sale-${b.token_id}`}>Sell the NFT for
+              <input id={`sale-${b.token_id}`} className="text pct" type="number" min="0" step="0.01" value={salePrice}
+                onChange={(e) => setSalePrice(e.target.value)} /> Ⓝ
+            </label>
+            <button onClick={() => {
+              try { run('List for sale', 'list_for_sale', { token_id: b.token_id, price: nearToYocto(salePrice) }); } catch (e) { setMsg({ ok: false, text: e.message }); }
+            }} disabled={Boolean(busy) || !Number(salePrice)}>
+              {busy === 'List for sale' ? 'Listing…' : 'List for sale'}
+            </button>
+          </>
+        )}
+      </div>
+      <p className="hint">Selling transfers the exclusive, future owner earnings and the NFT's Monad account. Credits never change: authors keep earning, plus 10 % of every resale.</p>
+      <div className="lease-box">
+        <label htmlFor={`rp-${b.token_id}`}>Remix price
+          <input id={`rp-${b.token_id}`} className="text pct" type="number" min="0" step="0.01" value={remixPrice}
+            onChange={(e) => setRemixPrice(e.target.value)} /> Ⓝ
+        </label>
+        <label htmlFor={`ra-${b.token_id}`} className="switch">
+          <input id={`ra-${b.token_id}`} type="checkbox" role="switch" checked={remixAllowed} onChange={(e) => setRemixAllowed(e.target.checked)} />
+          Remixes allowed
+        </label>
+        <button onClick={() => {
+          try { run('Remix license', 'set_license', { token_id: b.token_id, remix_price: nearToYocto(remixPrice), remix_allowed: remixAllowed }); } catch (e) { setMsg({ ok: false, text: e.message }); }
+        }} disabled={Boolean(busy)}>Save</button>
+      </div>
+      {!b.exclusive_sold && (
+        <div className="lease-box">
+          <label htmlFor={`lp-${b.token_id}`}>Non-exclusive license
+            <input id={`lp-${b.token_id}`} className="text pct" type="number" min="0" step="0.01" value={leasePrice}
+              onChange={(e) => setLeasePrice(e.target.value)} /> Ⓝ
+          </label>
+          <button onClick={() => {
+            try { run('License price', 'set_lease_price', { token_id: b.token_id, price: nearToYocto(leasePrice) }); } catch (e) { setMsg({ ok: false, text: e.message }); }
+          }} disabled={Boolean(busy)}>Save</button>
+        </div>
+      )}
+      {msg?.ok && <span className="ok-text">✓ {msg.text} <a href={explorerTxUrl(msg.hash)} target="_blank" rel="noreferrer">View transaction</a></span>}
+      {msg && !msg.ok && <span className="hint warn-text">{msg.text}</span>}
+    </div>
+  );
+}
+
 function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged }) {
   const [open, setOpen] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -344,6 +488,8 @@ function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged }) {
         <button aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide details' : 'Details'}</button>
       </div>
       {openError && <p className="hint warn-text">{openError}</p>}
+      {b.sale_price && <span className="badge ok">For sale · {yoctoToNear(b.sale_price)} Ⓝ</span>}
+      <BuyBox beat={b} onChanged={onChanged} />
       <LeaseBox beat={b} onChanged={onChanged} />
       {open && (
         <div className="beat-details">
@@ -354,6 +500,7 @@ function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged }) {
             {b.sale_price && <span>For sale (exclusive): {yoctoToNear(b.sale_price)} Ⓝ</span>}
             {b.total_earned !== '0' && <span>Earned: {yoctoToNear(b.total_earned)} Ⓝ</span>}
           </div>
+          <OwnerBox beat={b} onChanged={onChanged} />
           <span className="label">Credits</span>
           <CreditsView credits={b.credits} />
           <ClaimBox beat={b} onChanged={onChanged} />

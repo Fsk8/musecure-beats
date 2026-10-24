@@ -194,3 +194,4 @@ button.mini{padding:2px 6px;font-size:11px}
 .stat strong{font-family:var(--mono);font-size:16px}
 .cover{width:100%;aspect-ratio:1;border-radius:12px;display:block}
 .badges{display:flex;flex-wrap:wrap;gap:4px}
+.owner-box{display:grid;gap:6px;border:1px dashed var(--line);border-radius:10px;padding:10px}
