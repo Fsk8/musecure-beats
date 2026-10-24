@@ -3,7 +3,18 @@
 // firma solo la puede pedir el dueño actual del NFT (sign_for_beat → red MPC de NEAR).
 // El servidor nunca guarda llaves: sin una firma nueva del dueño, tampoco puede descifrar.
 
+import Module from 'node:module';
+import { webcrypto } from 'node:crypto';
 import lighthouseModule from '@lighthouse-web3/sdk';
+
+// El SDK de Lighthouse carga '@peculiar/webcrypto' con eval('require'), y el empaquetador de Vercel no
+// lo detecta (falla con "Cannot find module"). Node ya trae la misma API WebCrypto, así que la entregamos
+// cuando el SDK la pide.
+const originalLoad = Module._load;
+Module._load = function load(request, ...rest) {
+  if (request === '@peculiar/webcrypto') return { Crypto: function Crypto() { return webcrypto; } };
+  return originalLoad.call(this, request, ...rest);
+};
 import { hashMessage, recoverMessageAddress } from 'viem';
 import { beatEvmAddress } from './musecure.js';
 
