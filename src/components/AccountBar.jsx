@@ -37,11 +37,11 @@ function Earnings() {
     }
   }
 
-  if (tx) return <a className="pill ok" href={explorerTxUrl(tx)} target="_blank" rel="noreferrer">✓ Retirado · ver transacción</a>;
+  if (tx) return <a className="pill ok" href={explorerTxUrl(tx)} target="_blank" rel="noreferrer">✓ Withdrawn · view transaction</a>;
   if (earned === '0') return null;
   return (
-    <button className="pill ok" onClick={withdraw} disabled={busy} title={err || 'Retirar tus ganancias como dueño a tu cuenta'}>
-      {busy ? 'Retirando…' : `Ganancias: ${yoctoToNear(earned)} Ⓝ · Retirar`}
+    <button className="pill ok" onClick={withdraw} disabled={busy} title={err || 'Withdraw your owner earnings to your account'}>
+      {busy ? 'Withdrawing…' : `Earnings: ${yoctoToNear(earned)} Ⓝ · Withdraw`}
     </button>
   );
 }
@@ -61,12 +61,12 @@ export function AccountBar() {
   };
 
   if (status === 'no-auth') {
-    return <div className="account muted">Login desactivado: falta VITE_PRIVY_APP_ID en .env.local</div>;
+    return <div className="account muted">Login disabled: VITE_PRIVY_APP_ID is missing in .env.local</div>;
   }
   if (status === 'signed-out') {
     return (
       <div className="account">
-        <button className="primary" onClick={login}>Entrar con email</button>
+        <button className="primary" onClick={login}>Sign in with email</button>
       </div>
     );
   }
@@ -74,7 +74,7 @@ export function AccountBar() {
     return (
       <div className="account">
         <span className="pill warn">{error}</span>
-        <button onClick={logout}>Salir</button>
+        <button onClick={logout}>Sign out</button>
       </div>
     );
   }
@@ -84,20 +84,20 @@ export function AccountBar() {
       <span className="muted">{email}</span>
       {accountId ? (
         <button className="chip" onClick={copy} title={accountId}>
-          {copied ? 'Copiada' : shortAccount(accountId)}
+          {copied ? 'Copied' : shortAccount(accountId)}
         </button>
       ) : (
-        <span className="pill">Creando tu cuenta NEAR…</span>
+        <span className="pill">Creating your NEAR account…</span>
       )}
       {status === 'active' && <span className="pill ok">{balance?.toFixed(3)} Ⓝ</span>}
       {status === 'active' && <Earnings />}
-      {status === 'activating' && <span className="pill">Activando tu cuenta…</span>}
+      {status === 'activating' && <span className="pill">Activating your account…</span>}
       {status === 'inactive' && (
-        <button className="pill warn" onClick={activate} title={activationError || 'Activar cuenta'}>
-          {activationError ? 'No se pudo activar: reintentar' : 'Activar cuenta'}
+        <button className="pill warn" onClick={activate} title={activationError || 'Activate account'}>
+          {activationError ? 'Activation failed: retry' : 'Activate account'}
         </button>
       )}
-      <button onClick={logout}>Salir</button>
+      <button onClick={logout}>Sign out</button>
     </div>
   );
 }

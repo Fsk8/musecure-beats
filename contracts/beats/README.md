@@ -75,7 +75,7 @@ near account create-account sponsor-by-faucet-service musecure-beats.testnet aut
 ### 4. Desplegar e inicializar
 
 ```bash
-near contract deploy musecure-beats.testnet use-file target/near/musecure_beats_contract.wasm with-init-call new json-args '{"owner_id":"musecure-beats.testnet"}' prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' network-config testnet sign-with-keychain send
+near contract deploy musecure-beats.testnet use-file target/near/musecure_beats_contract.wasm with-init-call new json-args '{"owner_id":"musecure-beats.testnet","mpc_contract":"v1.signer-prod.testnet"}' prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' network-config testnet sign-with-keychain send
 ```
 
 ### 5. Probar en testnet
@@ -107,3 +107,17 @@ Si algún comando pide datos de forma interactiva, responde según lo que pregun
 - **Porcentajes en "bps"**: 10000 = 100 %. 6000 = 60 %.
 - **Al cambiar de manos el NFT se cierran las licencias nuevas**, también si es un regalo y no una venta.
 - **Títulos sin comillas ni barras invertidas**: los metadatos se arman como JSON y así no se pueden romper.
+
+
+## v2: NFT dinámico y cuenta propia de cada beat
+
+- **Portada on chain:** `nft_token`, `nft_tokens` y `nft_tokens_for_owner` devuelven `metadata.media` como un SVG
+  (data URI) generado en cada lectura con las notas del beat (`art`), su nivel (1–10) y sus insignias
+  (Original/Remix, Remixado, Semilla, Licenciado, Popular, Gana regalías, 1 NEAR ganado, Exclusiva vendida, Colaborativo).
+  `metadata.extra` suma `level`, `badges`, `audio`, `remix_count` y `lease_count`. Nada de esto se guarda: siempre está al día.
+- **Cuenta propia del beat en otras blockchains (Chain Signatures):** `sign_for_beat(token_id, payload)` pide al contrato MPC
+  (`v1.signer-prod.testnet`) que firme con la clave derivada de *este contrato* y la ruta `beat-<id>`. Solo el dueño actual del
+  NFT puede llamarlo (1 yoctoNEAR, ≥250 Tgas). Así cada NFT tiene su propia dirección EVM, y **al transferir el NFT, el control
+  de esa dirección pasa al nuevo dueño** sin puentes. `beat_account_path(token_id)` devuelve la ruta.
+
+El estado cambió (`art` en cada beat, `mpc_contract` en el contrato): la v2 se despliega en una cuenta nueva.

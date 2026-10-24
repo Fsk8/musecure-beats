@@ -43,7 +43,7 @@ export function Earnings() {
       setBeats(all);
       setOwnerEarned(owned);
     } catch (e) {
-      setError(`No se pudo leer el contrato: ${e?.message || e}`);
+      setError(`Could not read the contract: ${e?.message || e}`);
     }
   }, [provider, accountId]);
 
@@ -58,9 +58,9 @@ export function Earnings() {
     return beats
       .map((b) => {
         const roles = [];
-        if (b.creator === accountId) roles.push('Autor');
-        if (b.owner_id === accountId) roles.push('Dueño');
-        if (creditedAccounts(b.credits).includes(accountId)) roles.push('Acreditado');
+        if (b.creator === accountId) roles.push('Creator');
+        if (b.owner_id === accountId) roles.push('Owner');
+        if (creditedAccounts(b.credits).includes(accountId)) roles.push('Credited');
         const bps = myAuthorBps(b, accountId);
         return { b, roles, bps, pendingMine: (big(b.authors_balance) * bps) / BPS };
       })
@@ -90,54 +90,54 @@ export function Earnings() {
     }
   }
 
-  const withdraw = () => run('Retiro de ganancias de dueño', () => payContract(account, 'withdraw', {}));
-  const claim = (b) => run(`Reparto de #${b.token_id}`, () => payContract(account, 'claim', { token_id: b.token_id }));
+  const withdraw = () => run('Owner earnings withdrawal', () => payContract(account, 'withdraw', {}));
+  const claim = (b) => run(`Distribution of #${b.token_id}`, () => payContract(account, 'claim', { token_id: b.token_id }));
   async function claimAll() {
     for (const { b } of mine.filter((x) => big(x.b.authors_balance) > 0n)) {
       // Una transacción por beat: si una falla, se detiene y muestra el error.
       // eslint-disable-next-line no-await-in-loop
-      await run(`Reparto de #${b.token_id}`, () => payContract(account, 'claim', { token_id: b.token_id }));
+      await run(`Distribution of #${b.token_id}`, () => payContract(account, 'claim', { token_id: b.token_id }));
     }
   }
 
   if (status !== 'active') {
-    return <Panel plain id="earnings" title="Mis ganancias"><p className="hint">Inicia sesión para ver tus ganancias.</p></Panel>;
+    return <Panel plain id="earnings" title="My earnings"><p className="hint">Sign in to see your earnings.</p></Panel>;
   }
 
   return (
-    <Panel plain id="earnings" title="Mis ganancias">
+    <Panel plain id="earnings" title="My earnings">
       <div className="stats">
-        <div className="stat"><span className="label">Para retirar (dueño)</span><strong>{near(ownerEarned)}</strong></div>
-        <div className="stat"><span className="label">Tu parte por repartir</span><strong>{near(totals.pendingMine)}</strong></div>
-        <div className="stat"><span className="label">Ganado por tus beats</span><strong>{near(totals.earned)}</strong></div>
-        <div className="stat"><span className="label">Remixes · licencias</span><strong>{totals.remixes} · {totals.leases}</strong></div>
+        <div className="stat"><span className="label">To withdraw (owner)</span><strong>{near(ownerEarned)}</strong></div>
+        <div className="stat"><span className="label">Your share to distribute</span><strong>{near(totals.pendingMine)}</strong></div>
+        <div className="stat"><span className="label">Earned by your beats</span><strong>{near(totals.earned)}</strong></div>
+        <div className="stat"><span className="label">Remixes · licenses</span><strong>{totals.remixes} · {totals.leases}</strong></div>
       </div>
 
       <div className="bar">
         <button className="primary" onClick={withdraw} disabled={Boolean(busy) || big(ownerEarned) === 0n}>
-          {busy.startsWith('Retiro') ? 'Retirando…' : `Retirar ${near(ownerEarned)}`}
+          {busy.startsWith('Owner') ? 'Withdrawing…' : `Withdraw ${near(ownerEarned)}`}
         </button>
         <button onClick={claimAll} disabled={Boolean(busy) || totals.pending === 0n}
-          title="Reparte el saldo de autores de cada beat entre sus acreditados">
-          {busy.startsWith('Reparto') ? `${busy}…` : `Repartir todo (${near(totals.pending)})`}
+          title="Distributes each beat's authors' balance among its credited accounts">
+          {busy.startsWith('Distribution') ? `${busy}…` : `Distribute all (${near(totals.pending)})`}
         </button>
-        <button onClick={load} disabled={Boolean(busy)}>Actualizar</button>
+        <button onClick={load} disabled={Boolean(busy)}>Refresh</button>
       </div>
       <p className="hint">
-        Cada pago se divide: la mitad queda para el <strong>dueño</strong> del NFT (se retira aquí) y la otra mitad queda guardada
-        <strong> dentro del NFT</strong> como saldo de autores, hasta que alguien la reparte entre los acreditados. Si el beat es un
-        remix, una parte sube al original.
+        Every payment is split: half goes to the NFT <strong>owner</strong> (withdraw it here) and the other half is kept
+        <strong> inside the NFT</strong> as the authors' balance, until someone distributes it among the credited accounts. If the
+        beat is a remix, a share flows up to the original.
       </p>
 
       {error && <p className="hint warn-text">{error}</p>}
       {txs.length > 0 && (
         <ul className="credit-list">
-          {txs.map((t) => <li key={t.hash}>✓ {t.label}: <a href={explorerTxUrl(t.hash)} target="_blank" rel="noreferrer">ver transacción</a></li>)}
+          {txs.map((t) => <li key={t.hash}>✓ {t.label}: <a href={explorerTxUrl(t.hash)} target="_blank" rel="noreferrer">view transaction</a></li>)}
         </ul>
       )}
 
-      {beats === null && !error && <p className="hint">Cargando…</p>}
-      {beats && mine.length === 0 && <p className="hint">Todavía no tienes beats como autor, dueño o acreditado.</p>}
+      {beats === null && !error && <p className="hint">Loading…</p>}
+      {beats && mine.length === 0 && <p className="hint">You have no beats yet as creator, owner or credited author.</p>}
       {mine.length > 0 && (
         <ul className="beat-list">
           {mine.map(({ b, roles, bps, pendingMine }) => (
@@ -145,18 +145,18 @@ export function Earnings() {
               <div className="beat-top"><strong>{b.title}</strong><span className="num">#{b.token_id}</span></div>
               <div className="beat-meta">
                 <span>{roles.join(' · ')}</span>
-                {bps > 0n && <span>Tu parte de autores: {(Number(bps) / 100).toLocaleString()} %</span>}
-                {b.parent_id && <span>Remix de #{b.parent_id}</span>}
+                {bps > 0n && <span>Your authors' share: {(Number(bps) / 100).toLocaleString()} %</span>}
+                {b.parent_id && <span>Remix of #{b.parent_id}</span>}
               </div>
               <div className="beat-meta">
-                <span>Ganado: {near(b.total_earned)}</span>
-                <span>En el NFT por repartir: {near(b.authors_balance)}</span>
-                {pendingMine > 0n && <span>De eso, tuyo: {near(pendingMine)}</span>}
-                <span>{b.remix_count} remixes · {b.lease_count} licencias</span>
+                <span>Earned: {near(b.total_earned)}</span>
+                <span>In the NFT to distribute: {near(b.authors_balance)}</span>
+                {pendingMine > 0n && <span>Yours: {near(pendingMine)}</span>}
+                <span>{b.remix_count} remixes · {b.lease_count} licenses</span>
               </div>
               {big(b.authors_balance) > 0n && (
                 <div className="bar">
-                  <button onClick={() => claim(b)} disabled={Boolean(busy)}>Repartir {near(b.authors_balance)}</button>
+                  <button onClick={() => claim(b)} disabled={Boolean(busy)}>Distribute {near(b.authors_balance)}</button>
                 </div>
               )}
             </li>
@@ -164,8 +164,8 @@ export function Earnings() {
         </ul>
       )}
       <p className="hint">
-        Historial completo de pagos: <a href={explorerAccountUrl(CONTRACT_ID)} target="_blank" rel="noreferrer">transacciones del contrato</a>
-        {' · '}<a href={explorerAccountUrl(accountId)} target="_blank" rel="noreferrer">las de tu cuenta</a>.
+        Full payment history: <a href={explorerAccountUrl(CONTRACT_ID)} target="_blank" rel="noreferrer">contract transactions</a>
+        {' · '}<a href={explorerAccountUrl(accountId)} target="_blank" rel="noreferrer">your account's</a>.
       </p>
     </Panel>
   );

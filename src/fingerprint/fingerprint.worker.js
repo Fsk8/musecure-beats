@@ -56,12 +56,12 @@ self.onmessage = async (event) => {
   try {
     post({ type: 'PROGRESS', payload: { stage: 'Cargando FFmpeg…', percent: 0 } });
     const { pcm, duration } = await decodeAudioToPCM(file, (p) =>
-      post({ type: 'PROGRESS', payload: { stage: 'Decodificando audio…', percent: p * 0.6 } }),
+      post({ type: 'PROGRESS', payload: { stage: 'Decoding audio…', percent: p * 0.6 } }),
     );
-    post({ type: 'PROGRESS', payload: { stage: 'Calculando huella acústica…', percent: 70 } });
+    post({ type: 'PROGRESS', payload: { stage: 'Computing audio fingerprint…', percent: 70 } });
     const { fingerprint, sha256 } = await fingerprintFromPcm(pcm);
     post({ type: 'FINGERPRINT_RESULT', payload: { fingerprint, sha256, duration, fileName: file.name } });
   } catch (err) {
-    post({ type: 'ERROR', payload: { message: err?.message ?? 'Error desconocido en el worker' } });
+    post({ type: 'ERROR', payload: { message: err?.message ?? 'Unknown worker error' } });
   }
 };

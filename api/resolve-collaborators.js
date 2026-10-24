@@ -68,28 +68,28 @@ async function resolveOne(privy, email) {
   // Ya existe (por ejemplo, usuario de MuSecure con wallet EVM) pero sin wallet NEAR.
   const updated = await privy.users().pregenerateWallets(user.id, { wallets: NEAR_WALLET });
   const created = embeddedNear(updated);
-  if (!created) throw new Error('Privy no devolvió una wallet NEAR');
+  if (!created) throw new Error('Privy returned no NEAR wallet');
   return created;
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'Usa POST' });
+    return res.status(405).json({ error: 'Use POST' });
   }
   const missing = ['VITE_PRIVY_APP_ID', 'PRIVY_APP_SECRET'].filter((k) => !process.env[k]);
   if (!process.env.PRIVY_JWKS_URL && !process.env.PRIVY_VERIFICATION_KEY) missing.push('PRIVY_JWKS_URL');
-  if (missing.length) return res.status(500).json({ error: `Faltan variables en el servidor: ${missing.join(', ')}` });
+  if (missing.length) return res.status(500).json({ error: `Missing server variables: ${missing.join(', ')}` });
 
   try {
     // Solo alguien con sesión puede usar el App Secret para crear usuarios.
     await verifyPrivy(req);
     const { emails } = await readJson(req);
-    if (!Array.isArray(emails) || emails.length === 0) return res.status(400).json({ error: 'Falta la lista de emails' });
+    if (!Array.isArray(emails) || emails.length === 0) return res.status(400).json({ error: 'Missing email list' });
     const unique = [...new Set(emails.map((e) => (typeof e === 'string' ? e.trim().toLowerCase() : '')))];
-    if (unique.length > MAX_COLLABORATORS) return res.status(400).json({ error: `Máximo ${MAX_COLLABORATORS} emails` });
+    if (unique.length > MAX_COLLABORATORS) return res.status(400).json({ error: `At most ${MAX_COLLABORATORS} emails` });
     const bad = unique.find((e) => e.length > 254 || !EMAIL_RE.test(e));
-    if (bad !== undefined) return res.status(400).json({ error: `"${bad}" no es un email válido` });
+    if (bad !== undefined) return res.status(400).json({ error: `"${bad}" is not a valid email` });
 
     const privy = getClient();
     const settled = await Promise.allSettled(unique.map((email) => resolveOne(privy, email)));
@@ -105,6 +105,6 @@ export default async function handler(req, res) {
     });
     return res.status(200).json({ accounts, failed });
   } catch (err) {
-    return res.status(err.status || 500).json({ error: err.message || 'No se pudieron resolver los emails' });
+    return res.status(err.status || 500).json({ error: err.message || 'Could not resolve the emails' });
   }
 }

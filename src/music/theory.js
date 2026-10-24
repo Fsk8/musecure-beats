@@ -8,39 +8,39 @@ export const ROOTS = [
 ];
 
 export const SCALES = {
-  pmen: ['Pentatónica menor', [0, 3, 5, 7, 10]],
-  pmay: ['Pentatónica mayor', [0, 2, 4, 7, 9]],
+  pmen: ['Minor pentatonic', [0, 3, 5, 7, 10]],
+  pmay: ['Major pentatonic', [0, 2, 4, 7, 9]],
   blues: ['Blues', [0, 3, 5, 6, 7, 10]],
-  jon: ['Mayor (jónico)', [0, 2, 4, 5, 7, 9, 11]],
-  eol: ['Menor natural (eólico)', [0, 2, 3, 5, 7, 8, 10]],
-  dor: ['Dórico', [0, 2, 3, 5, 7, 9, 10]],
-  fri: ['Frigio', [0, 1, 3, 5, 7, 8, 10]],
-  lid: ['Lidio', [0, 2, 4, 6, 7, 9, 11]],
-  mix: ['Mixolidio', [0, 2, 4, 5, 7, 9, 10]],
-  loc: ['Locrio', [0, 1, 3, 5, 6, 8, 10]],
-  arm: ['Menor armónica', [0, 2, 3, 5, 7, 8, 11]],
+  jon: ['Major (Ionian)', [0, 2, 4, 5, 7, 9, 11]],
+  eol: ['Natural minor (Aeolian)', [0, 2, 3, 5, 7, 8, 10]],
+  dor: ['Dorian', [0, 2, 3, 5, 7, 9, 10]],
+  fri: ['Phrygian', [0, 1, 3, 5, 7, 8, 10]],
+  lid: ['Lydian', [0, 2, 4, 6, 7, 9, 11]],
+  mix: ['Mixolydian', [0, 2, 4, 5, 7, 9, 10]],
+  loc: ['Locrian', [0, 1, 3, 5, 6, 8, 10]],
+  arm: ['Harmonic minor', [0, 2, 3, 5, 7, 8, 11]],
 };
 
 export const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
 export const TRACKS = [
-  { id: 'drums', name: 'Batería', rows: 4 },
-  { id: 'bass', name: 'Bajo', rows: 8 },
+  { id: 'drums', name: 'Drums', rows: 4 },
+  { id: 'bass', name: 'Bass', rows: 8 },
   { id: 'lead', name: 'Lead', rows: 8 },
-  { id: 'chords', name: 'Acordes', rows: 7 },
+  { id: 'chords', name: 'Chords', rows: 7 },
 ];
 
 export const KITS = {
-  classic: { name: 'Clásico', rows: ['Bombo', 'Caja', 'Hi-hat', 'Palmas'] },
-  '808': { name: '808', rows: ['Bombo 808', 'Caja 808', 'Hi-hat 808', 'Clap 808'] },
-  acoustic: { name: 'Acústico', rows: ['Bombo', 'Caja', 'Hi-hat', 'Tom'] },
-  lofi: { name: 'Lo-fi', rows: ['Bombo lo-fi', 'Caja lo-fi', 'Hat lo-fi', 'Rim lo-fi'] },
-  andino: { name: 'Andino', rows: ['Bombo legüero', 'Chajchas', 'Palmas', 'Charango'] },
-  trap: { name: 'Trap', rows: ['Bombo 808 largo', 'Caja trap', 'Hi-hat', 'Clap'] },
-  house: { name: 'House', rows: ['Bombo house', 'Clap', 'Hat abierto', 'Shaker'] },
-  techno: { name: 'Techno', rows: ['Bombo techno', 'Rim', 'Hat metálico', 'Hat abierto'] },
-  dembow: { name: 'Dembow', rows: ['Bombo', 'Caja dembow', 'Hi-hat', 'Timbal'] },
-  jazz: { name: 'Jazz (escobillas)', rows: ['Bombo suave', 'Escobilla', 'Hi-hat', 'Aro'] },
+  classic: { name: 'Classic', rows: ['Kick', 'Snare', 'Hi-hat', 'Claps'] },
+  '808': { name: '808', rows: ['Kick 808', 'Snare 808', 'Hi-hat 808', 'Clap 808'] },
+  acoustic: { name: 'Acoustic', rows: ['Kick', 'Snare', 'Hi-hat', 'Tom'] },
+  lofi: { name: 'Lo-fi', rows: ['Lo-fi kick', 'Lo-fi snare', 'Lo-fi hat', 'Lo-fi rim'] },
+  andino: { name: 'Andean', rows: ['Bombo legüero', 'Chajchas', 'Claps', 'Charango'] },
+  trap: { name: 'Trap', rows: ['Long 808 kick', 'Trap snare', 'Hi-hat', 'Clap'] },
+  house: { name: 'House', rows: ['House kick', 'Clap', 'Open hat', 'Shaker'] },
+  techno: { name: 'Techno', rows: ['Techno kick', 'Rim', 'Metal hat', 'Open hat'] },
+  dembow: { name: 'Dembow', rows: ['Kick', 'Dembow snare', 'Hi-hat', 'Timbal'] },
+  jazz: { name: 'Jazz (brushes)', rows: ['Soft kick', 'Brush', 'Hi-hat', 'Rim'] },
 };
 
 /** Velocidad por valor de celda: 0 apagado, 1 fuerte, 2 suave. */

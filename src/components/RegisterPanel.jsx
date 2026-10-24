@@ -18,14 +18,14 @@ function CreditRows({ rows, setRows, idPrefix }) {
     <div className="credit-rows">
       {rows.map((r, i) => (
         <div className="credit-row" key={i}>
-          <input className="text" id={`${idPrefix}-acc-${i}`} aria-label="Email o cuenta NEAR" placeholder="email o cuenta.testnet"
+          <input className="text" id={`${idPrefix}-acc-${i}`} aria-label="Email or NEAR account" placeholder="email or account.testnet"
             value={r.account} onChange={(e) => update(i, 'account', e.target.value)} />
-          <input className="text pct" id={`${idPrefix}-pct-${i}`} aria-label="Porcentaje" type="number" min="0" max="100" step="0.01"
+          <input className="text pct" id={`${idPrefix}-pct-${i}`} aria-label="Percentage" type="number" min="0" max="100" step="0.01"
             placeholder="%" value={r.pct} onChange={(e) => update(i, 'pct', e.target.value)} />
-          <button aria-label="Quitar" onClick={() => setRows(rows.filter((_, j) => j !== i))}>×</button>
+          <button aria-label="Remove" onClick={() => setRows(rows.filter((_, j) => j !== i))}>×</button>
         </div>
       ))}
-      {rows.length < 10 && <button onClick={() => setRows([...rows, emptyRow()])}>+ Acreditar a alguien</button>}
+      {rows.length < 10 && <button onClick={() => setRows([...rows, emptyRow()])}>+ Credit someone</button>}
     </div>
   );
 }
@@ -74,14 +74,14 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
   const weightSum = tracks.reduce((s, t) => s + Number(t.weight || 0), 0);
 
   function buildCredits(emailMap) {
-    if (mode === 'whole') return { Whole: { credits: toCredits(whole, 'Créditos', emailMap) } };
-    if (Math.round(weightSum * 100) !== 10000) throw new Error('Los pesos de las pistas deben sumar 100 %');
+    if (mode === 'whole') return { Whole: { credits: toCredits(whole, 'Credits', emailMap) } };
+    if (Math.round(weightSum * 100) !== 10000) throw new Error('Track weights must add up to 100 %');
     return {
       PerTrack: {
         tracks: tracks.map((t, i) => ({
           name: TRACKS[i].name,
           weight_bps: Math.round(Number(t.weight) * 100),
-          credits: toCredits(t.rows, `Pista ${TRACKS[i].name}`, emailMap),
+          credits: toCredits(t.rows, `Track ${TRACKS[i].name}`, emailMap),
         })),
       },
     };
@@ -93,26 +93,26 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
     setResult(null);
     try {
       const cleanTitle = (title || '').trim();
-      if (!cleanTitle) throw new Error('Ponle nombre al beat en "Guardar y exportar"');
-      if (/["\\]/.test(cleanTitle)) throw new Error('El nombre no puede tener comillas ni barras invertidas');
+      if (!cleanTitle) throw new Error('Name your beat in "Save & export"');
+      if (/["\\]/.test(cleanTitle)) throw new Error('The name cannot contain quotes or backslashes');
       const emails = collectEmails(mode === 'whole' ? [whole] : tracks.map((t) => t.rows));
       // Valida porcentajes y repetidos antes de crear cuentas en Privy (cuentas provisorias por email).
-      buildCredits(Object.fromEntries(emails.map((e, i) => [e, `pendiente${i}.check`])));
-      if (emails.length) setStep('Preparando las cuentas de los colaboradores…');
+      buildCredits(Object.fromEntries(emails.map((e, i) => [e, `pending${i}.check`])));
+      if (emails.length) setStep('Preparing collaborator accounts…');
       const emailMap = await resolveEmails(emails, getAccessToken);
       const credits = buildCredits(emailMap);
       if (remixOf && balance !== null && Number(yoctoToNear(remixOf.remix_price, 6)) + 0.01 > balance) {
-        throw new Error(`No te alcanza el saldo: la licencia de remix cuesta ${yoctoToNear(remixOf.remix_price)} Ⓝ y tienes ${balance.toFixed(3)} Ⓝ`);
+        throw new Error(`Not enough balance: the remix license costs ${yoctoToNear(remixOf.remix_price)} Ⓝ and you have ${balance.toFixed(3)} Ⓝ`);
       }
       const remix_price = nearToYocto(remixPrice);
       const lease_price = nearToYocto(leasePrice);
       const license_uri = licenseUri.trim() || null;
-      if (license_uri && /["\\]/.test(license_uri)) throw new Error('El enlace de la licencia no puede tener comillas');
+      if (license_uri && /["\\]/.test(license_uri)) throw new Error('The license link cannot contain quotes');
 
-      setStep('Grabando una vuelta del beat…');
-      const { wav, project, baseName } = await buildFiles({ asRemix: Boolean(remixOf) });
+      setStep('Rendering one loop of the beat…');
+      const { wav, project, baseName, art } = await buildFiles({ asRemix: Boolean(remixOf) });
 
-      setStep('Calculando huellas SHA-256…');
+      setStep('Computing SHA-256 hashes…');
       const [audio_hash, project_hash] = await Promise.all([sha256Hex(wav), sha256Hex(project)]);
 
       // Huella acústica de MuSecure: une este beat con el catálogo de MuSecure (Monad).
@@ -120,19 +120,19 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
       let musecure_fingerprint = null;
       try {
         const fp = await generateFingerprint(new File([wav], `${baseName}.wav`, { type: 'audio/wav' }),
-          (stage, pct) => setStep(`Huella acústica: ${stage} ${Math.round(pct)}%`));
+          (stage, pct) => setStep(`Audio fingerprint: ${stage} ${Math.round(pct)}%`));
         musecure_fingerprint = fp.sha256;
       } catch (e) {
-        setWarning(`Se registró sin huella acústica de MuSecure: ${e?.message || e}`);
+        setWarning(`Registered without a MuSecure audio fingerprint: ${e?.message || e}`);
       }
 
-      setStep('Subiendo a IPFS…');
+      setStep('Uploading to IPFS…');
       const [audio_cid, project_cid] = await Promise.all([
         uploadToIpfs(wav, `${baseName}.wav`),
         uploadToIpfs(project, `${baseName}.musecure.json`),
       ]);
 
-      setStep('Firmando en NEAR…');
+      setStep('Signing on NEAR…');
       const beat = await registerBeat(account, {
         title: cleanTitle,
         audio_cid,
@@ -144,6 +144,7 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
         license_uri,
         lease_price,
         musecure_fingerprint,
+        art,
       }, remixOf);
       setResult(beat);
       onRegistered?.(beat);
@@ -156,24 +157,24 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
     }
   }
 
-  const summary = result ? `Registrado: #${result.token_id}`
-    : status !== 'active' ? 'Requiere iniciar sesión'
-      : remixOf ? `Remix de #${remixOf.token_id}` : 'Listo para registrar';
+  const summary = result ? `Registered: #${result.token_id}`
+    : status !== 'active' ? 'Sign-in required'
+      : remixOf ? `Remix of #${remixOf.token_id}` : 'Ready to register';
 
   return (
-    <Panel plain id="register" title="Registrar en NEAR" defaultOpen={false} summary={summary}>
-      {status === 'no-auth' && <p className="hint">Configura VITE_PRIVY_APP_ID para iniciar sesión y registrar.</p>}
+    <Panel plain id="register" title="Register on NEAR" defaultOpen={false} summary={summary}>
+      {status === 'no-auth' && <p className="hint">Set VITE_PRIVY_APP_ID to sign in and register.</p>}
       {status === 'signed-out' && (
         <div className="bar">
-          <p className="hint">Inicia sesión para registrar tu beat a tu nombre.</p>
-          <button className="primary" onClick={login}>Entrar con email</button>
+          <p className="hint">Sign in to register your beat under your name.</p>
+          <button className="primary" onClick={login}>Sign in with email</button>
         </div>
       )}
-      {status === 'activating' && <p className="hint">Activando tu cuenta NEAR ({shortAccount(accountId)})…</p>}
+      {status === 'activating' && <p className="hint">Activating your NEAR account ({shortAccount(accountId)})…</p>}
       {status === 'inactive' && (
         <div className="bar">
-          <p className="hint">Tu cuenta NEAR ({shortAccount(accountId)}) todavía no está activa.{activationError ? ` ${activationError}` : ''}</p>
-          <button className="primary" onClick={activate}>Activar cuenta</button>
+          <p className="hint">Your NEAR account ({shortAccount(accountId)}) is not active yet.{activationError ? ` ${activationError}` : ''}</p>
+          <button className="primary" onClick={activate}>Activate account</button>
         </div>
       )}
 
@@ -181,55 +182,55 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
         <>
           {linkedRemix && (
             <div className="remix-banner">
-              <strong>Similitud con el original: {similarity ? `${similarity.overall} %` : parent.error ? 'no se pudo medir' : linkedRemix.project_cid ? 'midiendo…' : 'sin datos'}</strong>
+              <strong>Similarity with the original: {similarity ? `${similarity.overall} %` : parent.error ? 'could not measure' : linkedRemix.project_cid ? 'measuring…' : 'no data'}</strong>
               {similarity && (
                 <span className="hint">
                   {TRACKS.map((t, i) => (similarity.tracks[i] === null ? null : `${t.name} ${similarity.tracks[i]} %`)).filter(Boolean).join(' · ')}
-                  {' '}— notas del original que siguen en su lugar.
+                  {' '}— original notes still in place.
                 </span>
               )}
-              {parent.error && <span className="hint">{parent.error}. Se registra como remix.</span>}
+              {parent.error && <span className="hint">{parent.error}. It will be registered as a remix.</span>}
               {similarity && !canDetach && (
-                <span className="hint">Conserva {REMIX_MIN_SIMILARITY} % o más del original: se registra como remix.</span>
+                <span className="hint">Keeps {REMIX_MIN_SIMILARITY} % or more of the original: it is registered as a remix.</span>
               )}
               {canDetach && (
                 <label htmlFor="asOriginal" className="switch">
                   <input id="asOriginal" type="checkbox" role="switch" checked={asOriginal} onChange={(e) => setAsOriginal(e.target.checked)} />
-                  Conserva menos del {REMIX_MIN_SIMILARITY} %: registrar como obra original (sin licencia de remix)
+                  Keeps less than {REMIX_MIN_SIMILARITY} %: register as an original work (no remix license)
                 </label>
               )}
             </div>
           )}
           {remixOf && (
             <div className="remix-banner">
-              <strong>Remix de #{remixOf.token_id} "{remixOf.title}"</strong> de {shortAccount(remixOf.creator)}
+              <strong>Remix of #{remixOf.token_id} "{remixOf.title}"</strong> by {shortAccount(remixOf.creator)}
               <span className="hint">
-                Licencia de remix: {remixOf.remix_price === '0' ? 'libre' : `${yoctoToNear(remixOf.remix_price)} Ⓝ, se paga al registrar`}
-                {' '}(la mitad para el dueño del original y la mitad para sus autores). Además, el original recibe el 20 % de lo
-                que ganen los autores de tu remix, para siempre y en cascada.
+                Remix license: {remixOf.remix_price === '0' ? 'free' : `${yoctoToNear(remixOf.remix_price)} Ⓝ, paid when you register`}
+                {' '}(half to the original's owner, half to its authors). The original also receives 20 % of what your remix's
+                authors earn, forever and in cascade.
               </span>
             </div>
           )}
           <p className="hint">
-            Se registra <strong>{title || 'Sin nombre'}</strong>: el audio (una vuelta en WAV) y el proyecto quedan en IPFS, y sus
-            huellas en el contrato, a nombre de {shortAccount(accountId)}.
+            Registering <strong>{title || 'Untitled'}</strong>: the audio (one WAV loop) and the project go to IPFS, and their
+            hashes go to the contract, under {shortAccount(accountId)}.
           </p>
 
           <div className="bar">
-            <span className="label">Créditos</span>
-            <div className="seg" role="radiogroup" aria-label="Modo de créditos">
-              <button role="radio" aria-checked={mode === 'whole'} onClick={() => setMode('whole')}>Por conjunto</button>
-              <button role="radio" aria-checked={mode === 'tracks'} onClick={() => setMode('tracks')}>Por pista</button>
+            <span className="label">Credits</span>
+            <div className="seg" role="radiogroup" aria-label="Credit mode">
+              <button role="radio" aria-checked={mode === 'whole'} onClick={() => setMode('whole')}>Whole beat</button>
+              <button role="radio" aria-checked={mode === 'tracks'} onClick={() => setMode('tracks')}>Per track</button>
             </div>
           </div>
 
           {mode === 'whole' && (
             <>
               <CreditRows rows={whole} setRows={setWhole} idPrefix="whole" />
-              <p className="hint">Lo que no repartas es tuyo. Sin acreditados, el 100 % es del creador.</p>
+              <p className="hint">Whatever you do not assign is yours. With no credits, 100 % goes to the creator.</p>
               <p className="hint">
-                Con un email, el colaborador recibe una cuenta NEAR ligada a ese email aunque nunca haya entrado, y ve el crédito
-                al iniciar sesión (en MuSecure Beats o con el mismo login de MuSecure). El email no queda publicado.
+                With an email, the collaborator gets a NEAR account tied to that email even if they never signed in, and sees the
+                credit when they sign in (on MuSecure Beats or with the same MuSecure login). The email is never published.
               </p>
             </>
           )}
@@ -241,7 +242,7 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
                   <div className="top">
                     <strong>{t.name}</strong>
                     <label htmlFor={`w${i}`}>
-                      Peso
+                      Weight
                       <input id={`w${i}`} className="text pct" type="number" min="0" max="100" value={tracks[i].weight}
                         onChange={(e) => setTracks(tracks.map((x, j) => (j === i ? { ...x, weight: e.target.value } : x)))} />
                       %
@@ -252,30 +253,30 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
                 </div>
               ))}
               <p className={`hint${Math.round(weightSum * 100) !== 10000 ? ' warn-text' : ''}`}>
-                Los pesos suman {weightSum} %. Deben sumar 100 %. Lo no acreditado de cada pista es del creador.
+                Weights add up to {weightSum} %. They must add up to 100 %. Unassigned shares of each track go to the creator.
               </p>
             </div>
           )}
 
           <div className="bar">
-            <label htmlFor="remixPrice">Licencia de remix
+            <label htmlFor="remixPrice">Remix license
               <input id="remixPrice" className="text pct" type="number" min="0" step="0.01" value={remixPrice}
                 onChange={(e) => setRemixPrice(e.target.value)} /> Ⓝ
             </label>
-            <label htmlFor="leasePrice">Licencia no exclusiva
+            <label htmlFor="leasePrice">Non-exclusive license
               <input id="leasePrice" className="text pct" type="number" min="0" step="0.01" value={leasePrice}
                 onChange={(e) => setLeasePrice(e.target.value)} /> Ⓝ
             </label>
-            <label htmlFor="licenseUri">Texto de licencia (opcional)
-              <input id="licenseUri" className="text" placeholder="ipfs://… o https://…" value={licenseUri}
+            <label htmlFor="licenseUri">License text (optional)
+              <input id="licenseUri" className="text" placeholder="ipfs://… or https://…" value={licenseUri}
                 onChange={(e) => setLicenseUri(e.target.value)} />
             </label>
           </div>
-          <p className="hint">0 = remix libre / no vender licencias no exclusivas. Lo puedes cambiar después como dueño.</p>
+          <p className="hint">0 = free remix / no non-exclusive licenses for sale. You can change it later as the owner.</p>
 
           <div className="bar">
             <button className="primary" onClick={submit} disabled={busy}>
-              {busy ? step : 'Registrar beat'}
+              {busy ? step : 'Register beat'}
             </button>
           </div>
         </>
@@ -285,15 +286,15 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
       {warning && <p className="hint">{warning}</p>}
       {result && (
         <div className="success" role="status">
-          <strong>¡Registrado! Beat #{result.token_id}: {result.title}</strong>
+          <strong>Registered! Beat #{result.token_id}: {result.title}</strong>
           <span className="hint">Audio: ipfs://{result.audio_cid}</span>
-          <span className="hint">SHA-256 del audio: {result.audio_hash.slice(0, 16)}…</span>
+          <span className="hint">Audio SHA-256: {result.audio_hash.slice(0, 16)}…</span>
           <span className="hint">
-            {result.txHash && <><a href={explorerTxUrl(result.txHash)} target="_blank" rel="noreferrer">Ver transacción</a> · </>}
-            <a href={explorerTokenUrl(CONTRACT_ID, result.token_id)} target="_blank" rel="noreferrer">Ver NFT en NearBlocks</a>
+            {result.txHash && <><a href={explorerTxUrl(result.txHash)} target="_blank" rel="noreferrer">View transaction</a> · </>}
+            <a href={explorerTokenUrl(CONTRACT_ID, result.token_id)} target="_blank" rel="noreferrer">View NFT on NearBlocks</a>
           </span>
           {result.musecure_fingerprint && (
-            <span className="hint">Huella MuSecure: {result.musecure_fingerprint.slice(0, 16)}…</span>
+            <span className="hint">MuSecure fingerprint: {result.musecure_fingerprint.slice(0, 16)}…</span>
           )}
         </div>
       )}

@@ -9,7 +9,7 @@ export const emptyGrid = (rows, value = 0) =>
 
 export function defaultState() {
   return {
-    title: 'Mi beat',
+    title: 'My beat',
     len: 16,
     bpm: 96,
     swing: 0,
@@ -127,13 +127,13 @@ export function parseProjectFile(text) {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error('El archivo no es un proyecto válido (no es JSON).');
+    throw new Error('This file is not a valid project (not JSON).');
   }
   if (data?.format !== PROJECT_FORMAT) {
-    throw new Error('Este archivo no es un proyecto de MuSecure Beats.');
+    throw new Error('This file is not a MuSecure Beats project.');
   }
   const S = normalizeState(data.beat);
-  if (!S) throw new Error('El proyecto está incompleto o dañado.');
+  if (!S) throw new Error('The project is incomplete or damaged.');
   return S;
 }
 
@@ -374,4 +374,20 @@ export function moveBar(S, from, to, tracks) {
     S.g[t] = S.g[t].map(reorder);
     S.p[t] = S.p[t].map(reorder);
   });
+}
+
+/**
+ * Notas del beat en forma compacta para la portada on chain del NFT:
+ * "<largo>|<pista0>|…|<pista3>", un carácter por paso con la fila de la nota más aguda (0–7) o ".".
+ */
+export function beatArt(S) {
+  const tracks = S.g.map((rows) => {
+    let out = '';
+    for (let c = 0; c < S.len; c++) {
+      const r = rows.findIndex((row) => row[c]);
+      out += r < 0 ? '.' : String(Math.min(r, 7));
+    }
+    return out;
+  });
+  return [S.len, ...tracks].join('|');
 }

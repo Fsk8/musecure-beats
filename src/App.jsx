@@ -4,7 +4,7 @@ import { playhead } from './audio/playhead';
 import { KITS, ROOTS, SCALES, TRACKS, VEL, computeTheory } from './music/theory';
 import {
   challengeDone, defaultState, emptyGrid, extendPattern, fileSafeName, nextCell, parseProjectFile, projectFile,
-  moveBar, quantizeTrack, randomTrack, rotateTrack,
+  beatArt, moveBar, quantizeTrack, randomTrack, rotateTrack,
 } from './music/patterns';
 import { audioBufferToWav, downloadBlob } from './io/files';
 import { useBeatState } from './state/useBeatState';
@@ -103,25 +103,25 @@ export default function App() {
   /** Abre en el secuenciador el proyecto de un beat registrado (descargado de IPFS) para remixarlo. */
   function openFromGallery(text, beat) {
     const loaded = parseProjectFile(text);
-    if (!window.confirm(`Se reemplazará el beat que tienes abierto por "${beat.title}". Si quieres conservarlo, guárdalo antes. ¿Continuar?`)) return;
+    if (!window.confirm(`This replaces your open beat with "${beat.title}". Save it first if you want to keep it. Continue?`)) return;
     const link = { token_id: beat.token_id, title: beat.title, creator: beat.creator, remix_price: beat.remix_price, project_cid: beat.project_cid };
     loaded.remixOf = link;
     loaded.title = `${beat.title} (remix)`;
     if (engine.playing) { engine.stop(); setPlaying(false); }
     setUndoBuf(null);
     replaceState({ ...loaded, tab: S.tab, page: 0, emode: S.emode });
-    setSaveMessage(`Abierto para remixar: #${beat.token_id} "${beat.title}". Al registrarlo quedará como su remix.`);
+    setSaveMessage(`Opened for remixing: #${beat.token_id} "${beat.title}". When you register it, it will be its remix.`);
     setDrawer(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   /** Empieza un beat desde cero (sin notas y sin vínculo de remix). */
   function newBeat() {
-    if (!window.confirm('¿Empezar un beat nuevo desde cero? El beat actual se reemplaza; si quieres conservarlo, guárdalo antes.')) return;
+    if (!window.confirm('Start a new beat from scratch? Your current beat will be replaced; save it first if you want to keep it.')) return;
     if (engine.playing) { engine.stop(); setPlaying(false); }
     setUndoBuf(null);
-    replaceState({ ...defaultState(), title: 'Nuevo beat', tab: S.tab, emode: S.emode });
-    setSaveMessage('Beat nuevo.');
+    replaceState({ ...defaultState(), title: 'New beat', tab: S.tab, emode: S.emode });
+    setSaveMessage('New beat.');
   }
 
   function handleCell(r, c) {
@@ -189,20 +189,20 @@ export default function App() {
     setUndoBuf({ t, g: structuredClone(S.g[t]), p: structuredClone(S.p[t]) });
     const { g, p, moved } = quantizeTrack(S.g[t], S.p[t], qGrid, S.len);
     mutate((d) => { d.g[t] = g; d.p[t] = p; });
-    setQMessage(moved ? `${moved} nota${moved > 1 ? 's' : ''} alineada${moved > 1 ? 's' : ''}` : 'Ya estaba alineada');
+    setQMessage(moved ? `${moved} note${moved > 1 ? 's' : ''} quantized` : 'Already quantized');
   }
 
   function undoQuantize() {
     if (!undoBuf) return;
     mutate((d) => { d.g[undoBuf.t] = undoBuf.g; d.p[undoBuf.t] = undoBuf.p; });
     setUndoBuf(null);
-    setQMessage('Deshecho');
+    setQMessage('Undone');
   }
 
   function saveProject() {
     const blob = new Blob([projectFile(S)], { type: 'application/json' });
     downloadBlob(blob, `${fileSafeName(S.title)}.musecure.json`);
-    setSaveMessage(`Proyecto guardado: ${fileSafeName(S.title)}.musecure.json (revisa tu carpeta de descargas).`);
+    setSaveMessage(`Project saved: ${fileSafeName(S.title)}.musecure.json (check your downloads folder).`);
   }
 
   async function openProject(file) {
@@ -211,7 +211,7 @@ export default function App() {
       if (engine.playing) { engine.stop(); setPlaying(false); }
       setUndoBuf(null);
       replaceState({ ...loaded, tab: S.tab, page: 0, emode: S.emode });
-      setSaveMessage(`Abierto: ${loaded.title}`);
+      setSaveMessage(`Opened: ${loaded.title}`);
     } catch (err) {
       setSaveMessage(err.message);
     }
@@ -224,11 +224,11 @@ export default function App() {
     setSaveMessage('');
     try {
       const buffer = await engine.renderOffline(wavLoops, setRecProgress);
-      if (!buffer) { setSaveMessage('Grabación cancelada.'); return; }
+      if (!buffer) { setSaveMessage('Render cancelled.'); return; }
       downloadBlob(audioBufferToWav(buffer), `${fileSafeName(S.title)}.wav`);
-      setSaveMessage(`WAV listo: ${fileSafeName(S.title)}.wav (${buffer.duration.toFixed(1)} s).`);
+      setSaveMessage(`WAV ready: ${fileSafeName(S.title)}.wav (${buffer.duration.toFixed(1)} s).`);
     } catch (err) {
-      setSaveMessage(`No se pudo grabar el WAV: ${err.message}. Prueba en Chrome o Firefox actualizados.`);
+      setSaveMessage(`Could not render the WAV: ${err.message}. Try an up-to-date Chrome or Firefox.`);
     } finally {
       setRecording(false);
     }
@@ -240,21 +240,22 @@ export default function App() {
     setRecording(true);
     try {
       const buffer = await engine.renderOffline(1, setRecProgress);
-      if (!buffer) throw new Error('Grabación cancelada');
+      if (!buffer) throw new Error('Render cancelled');
       return {
         wav: audioBufferToWav(buffer),
         // Si se registra como obra original, el proyecto publicado no lleva el vínculo de remix.
         project: new Blob([projectFile(asRemix ? S : { ...S, remixOf: null })], { type: 'application/json' }),
         baseName: fileSafeName(S.title),
+        art: beatArt(S),
       };
     } finally {
       setRecording(false);
     }
   }
 
-  const subtitle = `${KITS[S.kit].name} · ${ROOTS[S.root][1]} ${SCALES[S.scale][0].toLowerCase()} · ${S.len} pasos`;
+  const subtitle = `${KITS[S.kit].name} · ${ROOTS[S.root][0]} ${SCALES[S.scale][0].toLowerCase()} · ${S.len} steps`;
 
-  const drawerTitles = { save: 'Guardar y exportar', register: 'Registrar en NEAR', gallery: 'Beats en NEAR', earnings: 'Mis ganancias' };
+  const drawerTitles = { save: 'Save & export', register: 'Register on NEAR', gallery: 'Beats on NEAR', earnings: 'My earnings' };
 
   return (
     <>
@@ -262,26 +263,26 @@ export default function App() {
       <header>
         <div className="brand">
           <h1>MuSecure <span>Beats</span></h1>
-          <div className="sub"><strong>{S.title || 'Sin nombre'}</strong> · {subtitle}</div>
+          <div className="sub"><strong>{S.title || 'Untitled'}</strong> · {subtitle}</div>
         </div>
         <AccountBar />
       </header>
 
       {S.remixOf && (
         <div className="remix-strip" role="status">
-          <span>Estás editando un <strong>remix de #{S.remixOf.token_id} "{S.remixOf.title}"</strong>.</span>
-          <button className="mini" onClick={() => setDrawer('register')}>Ver similitud</button>
+          <span>You are editing a <strong>remix of #{S.remixOf.token_id} "{S.remixOf.title}"</strong>.</span>
+          <button className="mini" onClick={() => setDrawer('register')}>View similarity</button>
         </div>
       )}
 
-      <nav className="side-nav" aria-label="Paneles">
-        <button onClick={newBeat}>+ Nuevo beat</button>
-        <button aria-pressed={drawer === 'save'} onClick={() => toggleDrawer('save')}>Guardar y exportar</button>
+      <nav className="side-nav" aria-label="Panels">
+        <button onClick={newBeat}>+ New beat</button>
+        <button aria-pressed={drawer === 'save'} onClick={() => toggleDrawer('save')}>Save & export</button>
         <button aria-pressed={drawer === 'register'} onClick={() => toggleDrawer('register')}>
-          Registrar en NEAR{S.remixOf ? ` · remix de #${S.remixOf.token_id}` : ''}
+          Register on NEAR{S.remixOf ? ` · remix of #${S.remixOf.token_id}` : ''}
         </button>
-        <button aria-pressed={drawer === 'gallery'} onClick={() => toggleDrawer('gallery')}>Galería</button>
-        <button aria-pressed={drawer === 'earnings'} onClick={() => toggleDrawer('earnings')}>Mis ganancias</button>
+        <button aria-pressed={drawer === 'gallery'} onClick={() => toggleDrawer('gallery')}>Gallery</button>
+        <button aria-pressed={drawer === 'earnings'} onClick={() => toggleDrawer('earnings')}>My earnings</button>
       </nav>
 
       <Transport
@@ -325,8 +326,8 @@ export default function App() {
 
 
       <p className="note">
-        Prototipo. Todos los sonidos son sintetizados, también el kit andino (una aproximación).
-        Tu beat se guarda automáticamente solo en este navegador: usa "Guardar proyecto" para tener una copia.
+        Prototype. Every sound is synthesized, including the Andean kit (an approximation).
+        Your beat is saved automatically in this browser only: use "Save project" to keep a copy.
       </p>
     </div>
 

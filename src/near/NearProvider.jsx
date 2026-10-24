@@ -75,7 +75,7 @@ function PrivyNear({ children }) {
     if (!ready || !authenticated || nearWallet || creating.current) return;
     creating.current = true;
     createWallet({ chainType: 'near' })
-      .catch((e) => setError(`No se pudo crear tu cuenta NEAR: ${e?.message || e}`))
+      .catch((e) => setError(`Could not create your NEAR account: ${e?.message || e}`))
       .finally(() => { creating.current = false; });
   }, [ready, authenticated, nearWallet, createWallet]);
 
@@ -125,7 +125,7 @@ function PrivyNear({ children }) {
         body: JSON.stringify({ accountId }),
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || `La activación falló (${r.status})`);
+      if (!r.ok) throw new Error(data.error || `Activation failed (${r.status})`);
       for (let i = 0; i < 10; i++) {
         try {
           const b = await account.getBalance();
@@ -136,7 +136,7 @@ function PrivyNear({ children }) {
           await new Promise((ok) => setTimeout(ok, 1500));
         }
       }
-      throw new Error('La red tarda en confirmar. Vuelve a intentarlo en unos segundos.');
+      throw new Error('The network is slow to confirm. Try again in a few seconds.');
     } catch (e) {
       setActivationError(e?.message || String(e));
     } finally {

@@ -6,8 +6,8 @@ export function SoundPanel({ S, mutate }) {
   const set = (key, cast = (v) => v) => (e) => mutate((d) => { d[key] = cast(e.target.value); });
 
   return (
-    <Panel id="sound" title="Sonido"
-      summary={`${KITS[S.kit].name} · ${ROOTS[S.root][1]} ${SCALES[S.scale][0].toLowerCase()} · acordes ${(PADS[S.pad] || PADS.dreamy).name.toLowerCase()}`}>
+    <Panel id="sound" title="Sound"
+      summary={`${KITS[S.kit].name} · ${ROOTS[S.root][0]} ${SCALES[S.scale][0].toLowerCase()} · chords ${(PADS[S.pad] || PADS.dreamy).name.toLowerCase()}`}>
       <div className="fields">
         <label htmlFor="kit">
           Kit
@@ -18,15 +18,15 @@ export function SoundPanel({ S, mutate }) {
           </select>
         </label>
         <label htmlFor="root">
-          Raíz
+          Root
           <select id="root" value={S.root} onChange={set('root', Number)}>
             {ROOTS.map(([en, es], i) => (
-              <option key={en} value={i}>{`${es} (${en})`}</option>
+              <option key={en} value={i}>{en}</option>
             ))}
           </select>
         </label>
         <label htmlFor="scale">
-          Escala
+          Scale
           <select id="scale" value={S.scale} onChange={set('scale')}>
             {Object.entries(SCALES).map(([k, [name]]) => (
               <option key={k} value={k}>{name}</option>
@@ -40,25 +40,25 @@ export function SoundPanel({ S, mutate }) {
           </select>
         </label>
         <label htmlFor="bassSound">
-          Bajo
+          Bass
           <select id="bassSound" value={S.bassSound} onChange={set('bassSound')}>
             {Object.entries(BASSES).map(([k, p]) => <option key={k} value={k}>{p.name}</option>)}
           </select>
         </label>
         <label htmlFor="pad">
-          Sonido acordes
+          Chord sound
           <select id="pad" value={S.pad} onChange={set('pad')}>
             {Object.entries(PADS).map(([k, p]) => <option key={k} value={k}>{p.name}</option>)}
           </select>
         </label>
         <label htmlFor="arp">
-          Acordes
+          Chords
           <select id="arp" value={S.arp} onChange={set('arp')}>
-            <option value="off">Plaqué (todas juntas)</option>
-            <option value="up">Arpegio ↑</option>
-            <option value="down">Arpegio ↓</option>
-            <option value="updown">Arpegio ↑↓</option>
-            <option value="rand">Arpegio al azar</option>
+            <option value="off">Block (all together)</option>
+            <option value="up">Arpeggio ↑</option>
+            <option value="down">Arpeggio ↓</option>
+            <option value="updown">Arpeggio ↑↓</option>
+            <option value="rand">Random arpeggio</option>
           </select>
         </label>
       </div>

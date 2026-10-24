@@ -22,7 +22,7 @@ export function Drawer({ open, title, onClose, children }) {
         inert={open ? undefined : ''} tabIndex={-1}>
         <div className="drawer-head">
           <strong>{title}</strong>
-          <button onClick={onClose} aria-label="Cerrar panel">✕</button>
+          <button onClick={onClose} aria-label="Close panel">✕</button>
         </div>
         <div className="drawer-body">{children}</div>
       </aside>

@@ -1,6 +1,8 @@
 // Puente MuSecure Beats (NEAR) → MuSecure (Monad) con Chain Signatures.
-// La cuenta NEAR del usuario controla una dirección EVM derivada por la red MPC de NEAR
-// (contrato v1.signer-prod.testnet). Esa dirección registra el beat en MuSecureRegistry.
+// Cada beat NFT tiene su propia dirección EVM, derivada por la red MPC de NEAR a partir del
+// contrato de Beats y la ruta "beat-<id>". Solo el dueño actual del NFT puede pedir firmas para ella
+// (método sign_for_beat del contrato), así que el certificado de MuSecure queda a nombre del beat
+// y su control viaja con el NFT.
 
 import { JsonRpcProvider } from '@near-js/providers';
 import { createPublicClient, defineChain, getAddress, http, keccak256, parseAbi, toHex } from 'viem';
@@ -8,8 +10,8 @@ import { PrivyClient } from '@privy-io/node';
 
 export const NEAR_RPC = 'https://test.rpc.fastnear.com';
 export const MPC_CONTRACT = 'v1.signer-prod.testnet';
-/** Ruta de derivación: la misma cuenta NEAR + esta ruta = siempre la misma dirección EVM. */
-export const DERIVATION_PATH = 'musecure';
+/** Ruta de derivación de la cuenta propia de cada beat (igual que dynamic::beat_path en el contrato). */
+export const beatPath = (tokenId) => `beat-${tokenId}`;
 export const BEATS_CONTRACT = process.env.VITE_NEAR_CONTRACT || 'musecure-beats-favio.testnet';
 
 export const monad = defineChain({
@@ -34,7 +36,7 @@ function base58Decode(str) {
   let n = 0n;
   for (const ch of str) {
     const i = B58.indexOf(ch);
-    if (i < 0) throw new Error('base58 inválido');
+    if (i < 0) throw new Error('invalid base58');
     n = n * 58n + BigInt(i);
   }
   const hex = n.toString(16).padStart(2, '0');
@@ -46,15 +48,15 @@ function base58Decode(str) {
 /** "secp256k1:<base58 de 64 bytes>" (formato NEAR) → dirección EVM. */
 export function evmAddressFromNearKey(nearKey) {
   const raw = base58Decode(String(nearKey).split(':')[1]);
-  if (raw.length !== 64) throw new Error('Clave derivada con largo inesperado');
+  if (raw.length !== 64) throw new Error('Derived key has an unexpected length');
   return getAddress(`0x${keccak256(toHex(raw)).slice(-40)}`);
 }
 
-/** Dirección EVM que controla `accountId` con Chain Signatures (consulta al contrato MPC). */
-export async function deriveEvmAddress(accountId) {
+/** Dirección EVM de un beat: la deriva el contrato MPC para (contrato de Beats, "beat-<id>"). */
+export async function beatEvmAddress(tokenId) {
   const key = await nearProvider().callFunction(MPC_CONTRACT, 'derived_public_key', {
-    path: DERIVATION_PATH,
-    predecessor: accountId,
+    path: beatPath(tokenId),
+    predecessor: BEATS_CONTRACT,
     domain_id: 0,
   });
   return evmAddressFromNearKey(key);
@@ -71,14 +73,19 @@ export async function assertNearWalletOf(userDid, accountId) {
   const user = await privyClient().users()._get(userDid);
   const accounts = user?.linked_accounts ?? user?.linkedAccounts ?? [];
   const owns = accounts.some((a) => a?.type === 'wallet' && (a?.chain_type ?? a?.chainType) === 'near' && a?.address === accountId);
-  if (!owns) throw Object.assign(new Error('Esa cuenta NEAR no es la de tu sesión'), { status: 403 });
+  if (!owns) throw Object.assign(new Error('That NEAR account does not belong to your session'), { status: 403 });
 }
 
-/** El beat con esa huella debe existir en el contrato de Beats y ser de esa cuenta. */
-export async function assertBeatOf(accountId, fingerprint) {
-  const beats = await nearProvider().callFunction(BEATS_CONTRACT, 'get_beats_by_fingerprint', { fingerprint });
-  const beat = (beats || []).find((b) => b.creator === accountId);
-  if (!beat) throw Object.assign(new Error('No encontré un beat tuyo con esa huella en NEAR'), { status: 403 });
+export async function getBeat(tokenId) {
+  const beat = await nearProvider().callFunction(BEATS_CONTRACT, 'get_beat', { token_id: String(tokenId) });
+  if (!beat) throw Object.assign(new Error('The beat does not exist'), { status: 404 });
+  return beat;
+}
+
+/** Solo el dueño actual del NFT controla la cuenta del beat. */
+export async function assertBeatOwner(accountId, tokenId) {
+  const beat = await getBeat(tokenId);
+  if (beat.owner_id !== accountId) throw Object.assign(new Error('Only the NFT owner can use the beat account'), { status: 403 });
   return beat;
 }
 
@@ -107,4 +114,5 @@ export async function readJson(req) {
 }
 
 export const HEX64 = /^[0-9a-f]{64}$/;
+export const TOKEN_ID = /^\d{1,12}$/;
 export const IMPLICIT = /^[0-9a-f]{64}$/;

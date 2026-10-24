@@ -31,9 +31,15 @@ use near_sdk::collections::LazyOption;
 use near_sdk::json_types::{U128, U64};
 use near_sdk::store::{LookupMap, LookupSet};
 use near_sdk::{
-    assert_one_yocto, env, near, require, AccountId, BorshStorageKey, NearToken, PanicOnDefault, Promise,
-    PromiseOrValue,
+    assert_one_yocto, env, near, require, AccountId, BorshStorageKey, Gas, GasWeight, NearToken, PanicOnDefault,
+    Promise, PromiseOrValue,
 };
+
+mod dynamic;
+use dynamic::{beat_path, svg, svg_data_uri, validate_art, Stats};
+
+/// Contrato MPC de Chain Signatures en testnet.
+pub const DEFAULT_MPC_CONTRACT: &str = "v1.signer-prod.testnet";
 use std::collections::HashMap;
 
 /// Base de los porcentajes: 10000 = 100 %.
@@ -138,6 +144,8 @@ pub struct Beat {
     pub exclusive_sold: bool,
     /// Huella de MuSecure (SHA-256 del fingerprint Chromaprint) para unir el catálogo con Monad.
     pub musecure_fingerprint: Option<String>,
+    /// Notas del beat en forma compacta para dibujar la portada on chain (ver `dynamic::validate_art`).
+    pub art: Option<String>,
 }
 
 #[near(serializers = [json])]
@@ -156,6 +164,8 @@ pub struct RegisterArgs {
     pub lease_price: NearToken,
     /// Opcional: huella de la misma obra en MuSecure (64 hex).
     pub musecure_fingerprint: Option<String>,
+    /// Opcional: notas compactas para la portada dinámica.
+    pub art: Option<String>,
 }
 
 #[near(serializers = [json])]
@@ -183,6 +193,10 @@ pub struct BeatView {
     pub lease_count: u32,
     pub exclusive_sold: bool,
     pub musecure_fingerprint: Option<String>,
+    pub art: Option<String>,
+    /// NFT dinámico: nivel (1–10) e insignias, calculados en cada lectura.
+    pub level: u32,
+    pub badges: Vec<String>,
 }
 
 /// NEP-199: a quién paga un marketplace externo al vender el NFT.
@@ -206,12 +220,14 @@ pub struct Contract {
     /// Huella de MuSecure -> beats registrados con ella.
     by_fingerprint: LookupMap<String, Vec<TokenId>>,
     next_id: u64,
+    /// Contrato MPC de Chain Signatures: firma por la cuenta propia de cada beat en otras blockchains.
+    mpc_contract: AccountId,
 }
 
 #[near]
 impl Contract {
     #[init]
-    pub fn new(owner_id: AccountId) -> Self {
+    pub fn new(owner_id: AccountId, mpc_contract: Option<AccountId>) -> Self {
         let metadata = NFTContractMetadata {
             spec: NFT_METADATA_SPEC.to_string(),
             name: "MuSecure Beats".to_string(),
@@ -236,6 +252,7 @@ impl Contract {
             leases: LookupSet::new(StorageKey::Leases),
             by_fingerprint: LookupMap::new(StorageKey::ByFingerprint),
             next_id: 1,
+            mpc_contract: mpc_contract.unwrap_or_else(|| DEFAULT_MPC_CONTRACT.parse().unwrap()),
         }
     }
 
@@ -253,10 +270,10 @@ impl Contract {
         let attached = env::attached_deposit();
         {
             let parent = self.beat(&parent_id);
-            require!(parent.remix_allowed, "El dueño de este beat no permite remixes por ahora");
+            require!(parent.remix_allowed, "The owner of this beat does not allow remixes right now");
             require!(
                 attached >= parent.remix_price,
-                format!("La licencia de remix cuesta {} yoctoNEAR", parent.remix_price.as_yoctonear())
+                format!("The remix license costs {} yoctoNEAR", parent.remix_price.as_yoctonear())
             );
         }
         self.beat_mut(&parent_id).remix_count += 1;
@@ -281,13 +298,66 @@ impl Contract {
         view
     }
 
+    // ---------- cuenta propia del beat en otras blockchains (Chain Signatures)
+
+    /// Firma `payload` (hash de 32 bytes en hex) con la clave de la cuenta propia de este beat.
+    /// La clave la deriva la red MPC de NEAR a partir de este contrato y la ruta `beat-<id>`:
+    /// el beat tiene su propia dirección en Monad, Ethereum, etc. Solo el dueño actual del NFT puede
+    /// pedir firmas, así que **al vender el NFT, el control de esas cuentas pasa al comprador**.
+    /// Adjunta 1 yoctoNEAR y ~300 Tgas; el gas restante se reenvía al contrato MPC.
+    #[payable]
+    pub fn sign_for_beat(&mut self, token_id: TokenId, payload: String) -> Promise {
+        assert_one_yocto();
+        require!(
+            env::predecessor_account_id() == self.owner_of(&token_id),
+            "Only the NFT owner can sign for the beat account"
+        );
+        require!(
+            payload.len() == 64 && payload.chars().all(|c| c.is_ascii_hexdigit()),
+            "payload: must be 32 bytes in hex"
+        );
+        require!(env::prepaid_gas() >= Gas::from_tgas(250), "Attach at least 250 Tgas");
+        log_event(
+            "sign_for_beat",
+            &format!(r#"{{"token_id":"{}","path":"{}","payload":"{}"}}"#, token_id, beat_path(&token_id), payload.to_lowercase()),
+        );
+        let args = format!(
+            r#"{{"request":{{"payload_v2":{{"Ecdsa":"{}"}},"path":"{}","domain_id":0}}}}"#,
+            payload.to_lowercase(),
+            beat_path(&token_id)
+        );
+        Promise::new(self.mpc_contract.clone()).function_call_weight(
+            "sign".to_string(),
+            args.into_bytes(),
+            NearToken::from_yoctonear(1),
+            Gas::from_tgas(0),
+            GasWeight(1),
+        )
+    }
+
+    /// Ruta de derivación de la cuenta propia del beat (para calcular su dirección con el contrato MPC).
+    pub fn beat_account_path(&self, token_id: TokenId) -> String {
+        self.beat(&token_id);
+        beat_path(&token_id)
+    }
+
+    pub fn get_mpc_contract(&self) -> AccountId {
+        self.mpc_contract.clone()
+    }
+
+    /// Portada dinámica del beat como data URI (la misma que muestra `nft_token`).
+    pub fn beat_media(&self, token_id: TokenId) -> String {
+        let b = self.beat(&token_id);
+        svg_data_uri(&svg(&b.title, &token_id, b.art.as_deref(), &self.stats(&token_id)))
+    }
+
     // ---------- ingresos y cobros
 
     /// Apoya un beat con NEAR: mitad para el dueño, mitad para los autores.
     #[payable]
     pub fn support(&mut self, token_id: TokenId) {
         let attached = env::attached_deposit();
-        require!(attached > NearToken::from_yoctonear(0), "Adjunta NEAR para apoyar el beat");
+        require!(attached > NearToken::from_yoctonear(0), "Attach NEAR to support the beat");
         self.beat(&token_id);
         self.credit_income(&token_id, attached);
         log_event("support", &format!(r#"{{"token_id":"{}","amount":"{}"}}"#, token_id, attached.as_yoctonear()));
@@ -300,7 +370,7 @@ impl Contract {
             let beat = self.beat(&token_id);
             (beat.authors_balance.as_yoctonear(), beat.payout.clone())
         };
-        require!(balance > 0, "Este beat no tiene saldo de autores para repartir");
+        require!(balance > 0, "This beat has no authors' balance to distribute");
 
         let mut distributed: u128 = 0;
         for split in &payout {
@@ -328,7 +398,7 @@ impl Contract {
     pub fn withdraw(&mut self) -> NearToken {
         let account = env::predecessor_account_id();
         let amount = self.owner_earnings.remove(&account).unwrap_or(NearToken::from_yoctonear(0));
-        require!(amount > NearToken::from_yoctonear(0), "No tienes ganancias de dueño para retirar");
+        require!(amount > NearToken::from_yoctonear(0), "You have no owner earnings to withdraw");
         let _ = Promise::new(account.clone()).transfer(amount);
         log_event("withdraw", &format!(r#"{{"account_id":"{}","amount":"{}"}}"#, account, amount.as_yoctonear()));
         amount
@@ -344,12 +414,12 @@ impl Contract {
         let attached = env::attached_deposit();
         {
             let beat = self.beat(&token_id);
-            require!(!beat.exclusive_sold, "La exclusiva de este beat ya se vendió: no hay licencias nuevas");
-            require!(!beat.lease_price.is_zero(), "Este beat no vende licencias no exclusivas");
-            require!(attached == beat.lease_price, format!("El pago debe ser exactamente {} yoctoNEAR", beat.lease_price.as_yoctonear()));
+            require!(!beat.exclusive_sold, "The exclusive for this beat was already sold: no new licenses");
+            require!(!beat.lease_price.is_zero(), "This beat does not sell non-exclusive licenses");
+            require!(attached == beat.lease_price, format!("The payment must be exactly {} yoctoNEAR", beat.lease_price.as_yoctonear()));
         }
         let key = lease_key(&token_id, &buyer);
-        require!(!self.leases.contains(&key), "Ya tienes una licencia de este beat");
+        require!(!self.leases.contains(&key), "You already hold a license for this beat");
         self.leases.insert(key);
         self.beat_mut(&token_id).lease_count += 1;
         self.credit_income(&token_id, attached);
@@ -364,7 +434,7 @@ impl Contract {
     pub fn set_lease_price(&mut self, token_id: TokenId, price: NearToken) {
         self.assert_owner(&token_id);
         let beat = self.beat_mut(&token_id);
-        require!(!beat.exclusive_sold || price.is_zero(), "La exclusiva ya se vendió: no se pueden abrir licencias nuevas");
+        require!(!beat.exclusive_sold || price.is_zero(), "The exclusive was already sold: new licenses cannot be opened");
         beat.lease_price = price;
     }
 
@@ -380,7 +450,7 @@ impl Contract {
     pub fn list_for_sale(&mut self, token_id: TokenId, price: Option<NearToken>) {
         self.assert_owner(&token_id);
         if let Some(p) = price {
-            require!(p > NearToken::from_yoctonear(0), "El precio debe ser mayor que 0");
+            require!(p > NearToken::from_yoctonear(0), "The price must be greater than 0");
         }
         self.beat_mut(&token_id).sale_price = price;
     }
@@ -391,9 +461,9 @@ impl Contract {
         let buyer = env::predecessor_account_id();
         let attached = env::attached_deposit();
         let seller = self.owner_of(&token_id);
-        let price = self.beat(&token_id).sale_price.unwrap_or_else(|| env::panic_str("Este beat no está a la venta"));
-        require!(buyer != seller, "Ya eres el dueño de este beat");
-        require!(attached >= price, format!("El precio es {} yoctoNEAR", price.as_yoctonear()));
+        let price = self.beat(&token_id).sale_price.unwrap_or_else(|| env::panic_str("This beat is not for sale"));
+        require!(buyer != seller, "You already own this beat");
+        require!(attached >= price, format!("The price is {} yoctoNEAR", price.as_yoctonear()));
 
         let royalty = NearToken::from_yoctonear(price.as_yoctonear() * RESALE_ROYALTY_BPS as u128 / BPS as u128);
         {
@@ -402,7 +472,7 @@ impl Contract {
             beat.total_earned = beat.total_earned.saturating_add(royalty);
         }
         self.on_owner_change(&token_id);
-        self.tokens.internal_transfer(&seller, &buyer, &token_id, None, Some("Compra en MuSecure Beats".into()));
+        self.tokens.internal_transfer(&seller, &buyer, &token_id, None, Some("Purchase on MuSecure Beats".into()));
 
         let _ = Promise::new(seller.clone()).transfer(price.saturating_sub(royalty));
         let change = attached.saturating_sub(price);
@@ -483,7 +553,7 @@ impl Contract {
         *map.entry(owner).or_insert(0) += total - paid;
 
         if let Some(max) = max_len_payout {
-            require!(map.len() as u32 <= max, "El reparto tiene más destinatarios que max_len_payout");
+            require!(map.len() as u32 <= max, "The payout has more receivers than max_len_payout");
         }
         Payout { payout: map.into_iter().map(|(a, v)| (a, U128(v))).collect() }
     }
@@ -508,21 +578,21 @@ impl Contract {
     // ---------- interno
 
     fn beat(&self, token_id: &TokenId) -> &Beat {
-        self.beats.get(token_id).unwrap_or_else(|| env::panic_str("El beat no existe"))
+        self.beats.get(token_id).unwrap_or_else(|| env::panic_str("The beat does not exist"))
     }
 
     fn beat_mut(&mut self, token_id: &TokenId) -> &mut Beat {
-        self.beats.get_mut(token_id).unwrap_or_else(|| env::panic_str("El beat no existe"))
+        self.beats.get_mut(token_id).unwrap_or_else(|| env::panic_str("The beat does not exist"))
     }
 
     fn owner_of(&self, token_id: &TokenId) -> AccountId {
-        self.tokens.owner_by_id.get(token_id).unwrap_or_else(|| env::panic_str("El beat no existe"))
+        self.tokens.owner_by_id.get(token_id).unwrap_or_else(|| env::panic_str("The beat does not exist"))
     }
 
     fn assert_owner(&self, token_id: &TokenId) {
         require!(
             env::predecessor_account_id() == self.owner_of(token_id),
-            "Solo el dueño del NFT puede hacer esto"
+            "Only the NFT owner can do this"
         );
     }
 
@@ -571,13 +641,16 @@ impl Contract {
     }
 
     fn internal_register(&mut self, args: RegisterArgs, parent_id: Option<TokenId>, payout: Vec<Split>) -> BeatView {
-        validate_text(&args.title, 1, MAX_TITLE, "El título");
-        validate_text(&args.audio_cid, 1, MAX_CID, "El CID del audio");
-        validate_text(&args.project_cid, 1, MAX_CID, "El CID del proyecto");
+        validate_text(&args.title, 1, MAX_TITLE, "The title");
+        validate_text(&args.audio_cid, 1, MAX_CID, "The audio CID");
+        validate_text(&args.project_cid, 1, MAX_CID, "The project CID");
         validate_hash(&args.audio_hash, "audio_hash");
         validate_hash(&args.project_hash, "project_hash");
         if let Some(uri) = &args.license_uri {
-            validate_text(uri, 1, MAX_URI, "El enlace de la licencia");
+            validate_text(uri, 1, MAX_URI, "The license link");
+        }
+        if let Some(art) = &args.art {
+            validate_art(art);
         }
         let fingerprint = args.musecure_fingerprint.as_ref().map(|f| {
             validate_hash(f, "musecure_fingerprint");
@@ -591,8 +664,9 @@ impl Contract {
 
         let metadata = TokenMetadata {
             title: Some(args.title.clone()),
-            description: Some("Beat registrado en MuSecure Beats. El dueño de este NFT tiene la licencia exclusiva del beat.".to_string()),
-            media: Some(format!("ipfs://{}", args.audio_cid)),
+            description: Some("Beat registered on MuSecure Beats. The owner of this NFT holds the exclusive license to the beat.".to_string()),
+            // La portada se genera en cada lectura (NFT dinámico): no se guarda aquí.
+            media: None,
             media_hash: None,
             copies: Some(1),
             issued_at: Some(now_ms.to_string()),
@@ -639,6 +713,7 @@ impl Contract {
                 lease_count: 0,
                 exclusive_sold: false,
                 musecure_fingerprint: fingerprint.clone(),
+                art: args.art,
             },
         );
         if let Some(f) = fingerprint {
@@ -676,7 +751,59 @@ impl Contract {
             lease_count: b.lease_count,
             exclusive_sold: b.exclusive_sold,
             musecure_fingerprint: b.musecure_fingerprint.clone(),
+            art: b.art.clone(),
+            level: dynamic::level(&self.stats(token_id)),
+            badges: dynamic::badges(&self.stats(token_id)).into_iter().map(String::from).collect(),
         })
+    }
+
+    /// Estado dinámico de un beat: generación (cuántos originales tiene encima), remixes, licencias, ganancias.
+    fn stats(&self, token_id: &TokenId) -> Stats {
+        let b = self.beat(token_id);
+        let mut generation = 0;
+        let mut parent = b.parent_id.clone();
+        while let Some(p) = parent {
+            generation += 1;
+            if generation > 20 {
+                break;
+            }
+            parent = self.beats.get(&p).and_then(|pb| pb.parent_id.clone());
+        }
+        let credited = match &b.credits {
+            Credits::Whole { credits } => !credits.is_empty(),
+            Credits::PerTrack { tracks } => tracks.iter().any(|t| !t.credits.is_empty()),
+        };
+        Stats {
+            generation,
+            remix_count: b.remix_count,
+            lease_count: b.lease_count,
+            total_earned_yocto: b.total_earned.as_yoctonear(),
+            exclusive_sold: b.exclusive_sold,
+            credited,
+        }
+    }
+
+    /// Completa la metadata NEP-177 con la parte dinámica: portada SVG, nivel e insignias.
+    fn with_dynamic_metadata(&self, mut token: Token) -> Token {
+        let Some(b) = self.beats.get(&token.token_id) else { return token };
+        let stats = self.stats(&token.token_id);
+        if let Some(meta) = token.metadata.as_mut() {
+            meta.media = Some(svg_data_uri(&svg(&b.title, &token.token_id, b.art.as_deref(), &stats)));
+            let badges: Vec<String> = dynamic::badges(&stats).iter().map(|x| format!("\"{x}\"")).collect();
+            let dynamic_part = format!(
+                r#","level":{},"badges":[{}],"audio":"ipfs://{}","remix_count":{},"lease_count":{}"#,
+                dynamic::level(&stats),
+                badges.join(","),
+                b.audio_cid,
+                stats.remix_count,
+                stats.lease_count
+            );
+            meta.extra = meta.extra.take().map(|e| match e.strip_suffix('}') {
+                Some(body) => format!("{body}{dynamic_part}}}"),
+                None => e,
+            });
+        }
+        token
     }
 }
 
@@ -685,15 +812,15 @@ impl Contract {
 /// Como en MuSecureCredits: hasta 10 acreditados, cada uno > 0, sin repetir, y la suma
 /// no puede pasar de 100 %. Devuelve la suma.
 fn validate_credits(credits: &[Credit], what: &str) -> u32 {
-    require!(credits.len() <= MAX_CREDITS, format!("{what}: como máximo {MAX_CREDITS} acreditados"));
+    require!(credits.len() <= MAX_CREDITS, format!("{what}: at most {MAX_CREDITS} credited accounts"));
     let mut seen = std::collections::HashSet::new();
     let mut sum = 0u32;
     for c in credits {
-        require!(c.bps > 0, format!("{what}: cada porcentaje debe ser mayor que 0"));
-        require!(seen.insert(&c.account_id), format!("{what}: {} aparece dos veces", c.account_id));
+        require!(c.bps > 0, format!("{what}: each percentage must be greater than 0"));
+        require!(seen.insert(&c.account_id), format!("{what}: {} appears twice", c.account_id));
         sum += c.bps;
     }
-    require!(sum <= BPS, format!("{what}: los porcentajes no pueden sumar más de 100 % (10000)"));
+    require!(sum <= BPS, format!("{what}: percentages cannot add up to more than 100 % (10000)"));
     sum
 }
 
@@ -722,10 +849,10 @@ pub fn own_payout(credits: &Credits, creator: &AccountId) -> Vec<Split> {
             add_share(&mut order, &mut acc, creator, BPS - sum);
         }
         Credits::PerTrack { tracks } => {
-            require!(tracks.len() == TRACK_COUNT, "Se esperan créditos para las 4 pistas");
+            require!(tracks.len() == TRACK_COUNT, "Credits are expected for all 4 tracks");
             require!(
                 tracks.iter().map(|t| t.weight_bps).sum::<u32>() == BPS,
-                "Los pesos de las pistas deben sumar 100 % (10000)"
+                "Track weights must add up to 100 % (10000)"
             );
             for t in tracks {
                 if t.weight_bps == 0 {
@@ -769,14 +896,14 @@ fn fix_rounding(splits: &mut [Split]) {
 
 fn validate_text(value: &str, min: usize, max: usize, what: &str) {
     let len = value.chars().count();
-    require!(len >= min && len <= max, format!("{what} debe tener entre {min} y {max} caracteres"));
-    require!(!value.contains('"') && !value.contains('\\'), format!("{what} no puede tener comillas ni barras invertidas"));
+    require!(len >= min && len <= max, format!("{what} must have between {min} and {max} characters"));
+    require!(!value.contains('"') && !value.contains('\\'), format!("{what} cannot contain quotes or backslashes"));
 }
 
 fn validate_hash(value: &str, what: &str) {
     require!(
         value.len() == 64 && value.chars().all(|c| c.is_ascii_hexdigit()),
-        format!("{what} debe ser un SHA-256 en hexadecimal (64 caracteres)")
+        format!("{what} must be a hex SHA-256 (64 characters)")
     );
 }
 
@@ -818,7 +945,7 @@ impl NonFungibleTokenCore for Contract {
     }
 
     fn nft_token(&self, token_id: TokenId) -> Option<Token> {
-        self.tokens.nft_token(token_id)
+        self.tokens.nft_token(token_id).map(|t| self.with_dynamic_metadata(t))
     }
 }
 
@@ -865,7 +992,7 @@ impl NonFungibleTokenEnumeration for Contract {
     }
 
     fn nft_tokens(&self, from_index: Option<U128>, limit: Option<u64>) -> Vec<Token> {
-        self.tokens.nft_tokens(from_index, limit)
+        self.tokens.nft_tokens(from_index, limit).into_iter().map(|t| self.with_dynamic_metadata(t)).collect()
     }
 
     fn nft_supply_for_owner(&self, account_id: AccountId) -> U128 {
@@ -873,7 +1000,11 @@ impl NonFungibleTokenEnumeration for Contract {
     }
 
     fn nft_tokens_for_owner(&self, account_id: AccountId, from_index: Option<U128>, limit: Option<u64>) -> Vec<Token> {
-        self.tokens.nft_tokens_for_owner(account_id, from_index, limit)
+        self.tokens
+            .nft_tokens_for_owner(account_id, from_index, limit)
+            .into_iter()
+            .map(|t| self.with_dynamic_metadata(t))
+            .collect()
     }
 }
 

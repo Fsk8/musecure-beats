@@ -6,13 +6,13 @@ export function Mixer({ S, mutate }) {
 
   const flags = TRACKS.map((t, i) => {
     const m = S.mix[i];
-    if (m.mute) return `${t.name}: mute`;
+    if (m.mute) return `${t.name}: muted`;
     if (m.solo) return `${t.name}: solo`;
     return null;
   }).filter(Boolean);
 
   return (
-    <Panel id="mixer" title="Mezclador" summary={flags.length ? flags.join(' · ') : 'Todas las pistas suenan'}>
+    <Panel id="mixer" title="Mixer" summary={flags.length ? flags.join(' · ') : 'All tracks playing'}>
       <div className="mixer">
         {TRACKS.map((t, i) => {
           const m = S.mix[i];
@@ -21,7 +21,7 @@ export function Mixer({ S, mutate }) {
               <div className="top">
                 <strong>{t.name}</strong>
                 <div className="chbtns">
-                  <button className="mute" aria-pressed={m.mute} aria-label={`Silenciar ${t.name}`}
+                  <button className="mute" aria-pressed={m.mute} aria-label={`Mute ${t.name}`}
                     onClick={() => mutate((d) => { d.mix[i].mute = !d.mix[i].mute; })}>
                     M
                   </button>
@@ -32,12 +32,12 @@ export function Mixer({ S, mutate }) {
                 </div>
               </div>
               {i > 0 && (
-                <div className="oct" role="group" aria-label={`Octava de ${t.name}`}>
-                  <span>Octava</span>
-                  <button aria-label={`Bajar octava de ${t.name}`} disabled={S.oct[i] <= OCT_RANGE[0]}
+                <div className="oct" role="group" aria-label={`${t.name} octave`}>
+                  <span>Octave</span>
+                  <button aria-label={`${t.name} octave down`} disabled={S.oct[i] <= OCT_RANGE[0]}
                     onClick={() => mutate((d) => { d.oct[i] -= 1; })}>−</button>
                   <span className="num" aria-live="polite">{S.oct[i] > 0 ? `+${S.oct[i]}` : S.oct[i]}</span>
-                  <button aria-label={`Subir octava de ${t.name}`} disabled={S.oct[i] >= OCT_RANGE[1]}
+                  <button aria-label={`${t.name} octave up`} disabled={S.oct[i] >= OCT_RANGE[1]}
                     onClick={() => mutate((d) => { d.oct[i] += 1; })}>+</button>
                 </div>
               )}

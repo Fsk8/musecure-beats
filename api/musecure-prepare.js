@@ -1,7 +1,7 @@
 // Función de Vercel: prepara el registro de un beat en MuSecure (Monad).
 //
-// 1. Verifica la sesión de Privy y que la cuenta NEAR y el beat sean del usuario.
-// 2. Calcula su dirección EVM con Chain Signatures.
+// 1. Verifica la sesión de Privy y que la cuenta NEAR sea la del usuario y la dueña del NFT.
+// 2. Calcula la dirección EVM propia del beat (Chain Signatures: contrato de Beats + "beat-<id>").
 // 3. Pide a MuSecure gas de testnet para esa dirección y la firma del score (como servidor aliado).
 // 4. Arma la transacción registerWork sin firmar y devuelve su hash: eso es lo que firmará la red MPC.
 //
@@ -12,7 +12,7 @@
 import { encodeFunctionData, formatEther, keccak256, serializeTransaction } from 'viem';
 import { verifyPrivy } from './_lib/privy-auth.js';
 import {
-  HEX64, IMPLICIT, REGISTRY_ABI, assertBeatOf, assertNearWalletOf, deriveEvmAddress, monad, monadClient,
+  HEX64, IMPLICIT, REGISTRY_ABI, TOKEN_ID, assertBeatOwner, assertNearWalletOf, beatEvmAddress, monad, monadClient,
   musecureApi, readJson, registryAddress,
 } from './_lib/musecure.js';
 
@@ -22,29 +22,31 @@ const SCORE = 0;
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'Usa POST' });
+    return res.status(405).json({ error: 'Use POST' });
   }
   const missing = ['PRIVY_APP_SECRET', 'VITE_PRIVY_APP_ID', 'MUSECURE_API_URL', 'PARTNER_API_KEY'].filter((k) => !process.env[k]);
-  if (missing.length) return res.status(500).json({ error: `Faltan variables en el servidor: ${missing.join(', ')}` });
+  if (missing.length) return res.status(500).json({ error: `Missing server variables: ${missing.join(', ')}` });
 
   try {
     const did = await verifyPrivy(req);
-    const { accountId, fingerprint, metadataCid } = await readJson(req);
-    if (!IMPLICIT.test(String(accountId || ''))) return res.status(400).json({ error: 'Cuenta NEAR inválida' });
-    if (!HEX64.test(String(fingerprint || ''))) return res.status(400).json({ error: 'El beat no tiene huella MuSecure' });
-    if (!/^[a-zA-Z0-9]{20,100}$/.test(String(metadataCid || ''))) return res.status(400).json({ error: 'CID de metadata inválido' });
+    const { accountId, tokenId, metadataCid } = await readJson(req);
+    if (!IMPLICIT.test(String(accountId || ''))) return res.status(400).json({ error: 'Invalid NEAR account' });
+    if (!TOKEN_ID.test(String(tokenId || ''))) return res.status(400).json({ error: 'Invalid beat' });
+    if (!/^[a-zA-Z0-9]{20,100}$/.test(String(metadataCid || ''))) return res.status(400).json({ error: 'Invalid metadata CID' });
 
     await assertNearWalletOf(did, accountId);
-    await assertBeatOf(accountId, fingerprint);
+    const beat = await assertBeatOwner(accountId, tokenId);
+    const fingerprint = beat.musecure_fingerprint;
+    if (!HEX64.test(String(fingerprint || ''))) return res.status(400).json({ error: 'The beat has no MuSecure fingerprint' });
 
     const client = monadClient();
     const registry = registryAddress();
     const fingerprintHash = `0x${fingerprint}`;
     if (await client.readContract({ address: registry, abi: REGISTRY_ABI, functionName: 'workExists', args: [fingerprintHash] })) {
-      return res.status(409).json({ error: 'Este audio ya está registrado en MuSecure', alreadyRegistered: true });
+      return res.status(409).json({ error: 'This audio is already registered on MuSecure', alreadyRegistered: true });
     }
 
-    const evmAddress = await deriveEvmAddress(accountId);
+    const evmAddress = await beatEvmAddress(tokenId);
 
     // Gas: la tesorería de MuSecure no envía nada si la dirección ya tiene saldo suficiente.
     const airdrop = await musecureApi('/api/airdrop-gas', { address: evmAddress });
@@ -90,6 +92,6 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     console.error('[musecure-prepare]', err?.message);
-    return res.status(err.status || 500).json({ error: err.message || 'No se pudo preparar el registro en MuSecure' });
+    return res.status(err.status || 500).json({ error: err.message || 'Could not prepare the MuSecure registration' });
   }
 }

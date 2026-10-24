@@ -48,12 +48,13 @@ fn args(title: &str, credits: Credits, price: NearToken) -> RegisterArgs {
         license_uri: Some("ipfs://bafylicencia".into()),
         lease_price: zero(),
         musecure_fingerprint: None,
+        art: None,
     }
 }
 
 fn setup() -> Contract {
     set_caller("owner.testnet", zero());
-    Contract::new(acc("owner.testnet"))
+    Contract::new(acc("owner.testnet"), None)
 }
 
 /// Original "1" de Favio (60 %) e Ingrid (40 %), a nombre de Favio.
@@ -97,7 +98,7 @@ fn register_whole_credits() {
 }
 
 #[test]
-#[should_panic(expected = "no pueden sumar más de 100")]
+#[should_panic(expected = "cannot add up to more than 100")]
 fn credits_cannot_exceed_100() {
     let mut c = setup();
     set_caller("favio.testnet", zero());
@@ -128,7 +129,7 @@ fn no_credits_means_all_to_creator() {
 }
 
 #[test]
-#[should_panic(expected = "aparece dos veces")]
+#[should_panic(expected = "appears twice")]
 fn credits_no_duplicates() {
     let mut c = setup();
     set_caller("favio.testnet", zero());
@@ -146,7 +147,7 @@ fn hash_must_be_sha256_hex() {
 }
 
 #[test]
-#[should_panic(expected = "comillas")]
+#[should_panic(expected = "quotes")]
 fn title_cannot_break_metadata_json() {
     let mut c = setup();
     set_caller("favio.testnet", zero());
@@ -242,7 +243,7 @@ fn remix_income_splits_owner_and_authors() {
 }
 
 #[test]
-#[should_panic(expected = "La licencia de remix cuesta")]
+#[should_panic(expected = "The remix license costs")]
 fn remix_requires_price() {
     let mut c = with_original(near(2));
     set_caller("pepe.testnet", near(1));
@@ -250,7 +251,7 @@ fn remix_requires_price() {
 }
 
 #[test]
-#[should_panic(expected = "no permite remixes")]
+#[should_panic(expected = "does not allow remixes")]
 fn owner_can_close_remixes() {
     let mut c = with_original(zero());
     set_caller("favio.testnet", zero());
@@ -260,7 +261,7 @@ fn owner_can_close_remixes() {
 }
 
 #[test]
-#[should_panic(expected = "Solo el dueño")]
+#[should_panic(expected = "Only the NFT owner")]
 fn only_owner_sets_license() {
     let mut c = with_original(zero());
     set_caller("ingrid.testnet", zero()); // es autora, pero no dueña
@@ -304,14 +305,14 @@ fn claim_cascades_to_parent_and_owners_withdraw() {
 }
 
 #[test]
-#[should_panic(expected = "no tiene saldo")]
+#[should_panic(expected = "no authors")]
 fn claim_without_balance() {
     let mut c = with_original(zero());
     c.claim("1".into());
 }
 
 #[test]
-#[should_panic(expected = "No tienes ganancias")]
+#[should_panic(expected = "no owner earnings")]
 fn withdraw_without_earnings() {
     let mut c = with_original(zero());
     set_caller("ingrid.testnet", zero());
@@ -346,7 +347,7 @@ fn buy_pays_seller_royalty_and_change() {
 }
 
 #[test]
-#[should_panic(expected = "no está a la venta")]
+#[should_panic(expected = "not for sale")]
 fn buy_requires_listing() {
     let mut c = with_original(zero());
     set_caller("coleccionista.testnet", near(5));
@@ -354,7 +355,7 @@ fn buy_requires_listing() {
 }
 
 #[test]
-#[should_panic(expected = "El precio es")]
+#[should_panic(expected = "The price is")]
 fn buy_requires_full_price() {
     let mut c = with_original(zero());
     set_caller("favio.testnet", zero());
@@ -434,7 +435,7 @@ fn buy_lease_splits_income() {
 }
 
 #[test]
-#[should_panic(expected = "exactamente")]
+#[should_panic(expected = "exactly")]
 fn lease_requires_exact_payment() {
     let mut c = with_leases(near(2));
     set_caller("artista.testnet", near(3));
@@ -442,7 +443,7 @@ fn lease_requires_exact_payment() {
 }
 
 #[test]
-#[should_panic(expected = "Ya tienes una licencia")]
+#[should_panic(expected = "already hold a license")]
 fn one_lease_per_account() {
     let mut c = with_leases(near(2));
     set_caller("artista.testnet", near(2));
@@ -452,7 +453,7 @@ fn one_lease_per_account() {
 }
 
 #[test]
-#[should_panic(expected = "no vende licencias")]
+#[should_panic(expected = "does not sell non-exclusive")]
 fn lease_needs_price() {
     let mut c = with_original(zero());
     set_caller("artista.testnet", near(1));
@@ -477,7 +478,7 @@ fn selling_exclusive_closes_new_leases_but_keeps_old_ones() {
 }
 
 #[test]
-#[should_panic(expected = "ya se vendió")]
+#[should_panic(expected = "already sold")]
 fn no_new_leases_after_exclusive_sale() {
     let mut c = with_leases(near(2));
     set_caller("favio.testnet", NearToken::from_yoctonear(1));
@@ -504,4 +505,128 @@ fn find_beats_by_musecure_fingerprint() {
         found[0].musecure_fingerprint.as_deref(),
         Some("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789")
     );
+}
+
+// ---------- NFT dinámico y cuenta propia del beat
+
+const ART: &str = "16|0...0...0...0...|..2...2.......2.|4.3.2.1.........|6.......4.......";
+
+#[test]
+fn dynamic_metadata_has_svg_cover_and_badges() {
+    let mut c = setup();
+    set_caller("favio.testnet", zero());
+    let mut a = args("Beat <Dinámico>", whole(&[("ingrid.testnet", 3000)]), near(1));
+    a.art = Some(ART.into());
+    c.register_beat(a);
+    let token = c.nft_token("1".into()).unwrap();
+    let meta = token.metadata.unwrap();
+    let media = meta.media.unwrap();
+    assert!(media.starts_with("data:image/svg+xml;base64,"));
+    use near_sdk::base64::Engine as _;
+    let svg = String::from_utf8(near_sdk::base64::engine::general_purpose::STANDARD.decode(&media[26..]).unwrap()).unwrap();
+    assert!(svg.contains("Beat &lt;Dinámico&gt;"), "el título se escapa");
+    assert!(svg.contains("Original") && svg.contains("Collaborative"));
+    let extra = meta.extra.unwrap();
+    assert!(extra.contains(r#""level":1"#) && extra.contains(r#""badges":["Original","Collaborative"]"#), "{extra}");
+    assert!(extra.ends_with('}'));
+}
+
+#[test]
+fn badges_and_level_evolve_with_remixes() {
+    let mut c = with_original(milli(100));
+    set_caller("ana.testnet", milli(100));
+    c.remix("1".into(), args("Remix", whole(&[]), zero()));
+    let original = c.get_beat("1".into()).unwrap();
+    assert!(original.badges.contains(&"Remixed".to_string()));
+    assert!(original.badges.contains(&"Earns royalties".to_string()));
+    assert_eq!(original.level, 3);
+    let remix = c.get_beat("2".into()).unwrap();
+    assert_eq!(remix.badges[0], "Remix");
+}
+
+#[test]
+#[should_panic(expected = "art: each track")]
+fn art_must_match_length() {
+    let mut c = setup();
+    set_caller("favio.testnet", zero());
+    let mut a = args("Mal", whole(&[]), zero());
+    a.art = Some("16|0...|....|....|....".into());
+    c.register_beat(a);
+}
+
+#[test]
+#[should_panic(expected = "art: invalid characters")]
+fn art_rejects_bad_chars() {
+    let mut c = setup();
+    set_caller("favio.testnet", zero());
+    let mut a = args("Mal", whole(&[]), zero());
+    a.art = Some("16|<script>........|................|................|................".into());
+    c.register_beat(a);
+}
+
+fn set_caller_gas(caller: &str, deposit: NearToken, tgas: u64) {
+    let mut b = VMContextBuilder::new();
+    b.current_account_id(acc("beats.testnet"))
+        .predecessor_account_id(acc(caller))
+        .signer_account_id(acc(caller))
+        .attached_deposit(deposit)
+        .prepaid_gas(Gas::from_tgas(tgas))
+        .account_balance(NearToken::from_near(100));
+    testing_env!(b.build());
+}
+
+#[test]
+fn owner_can_sign_for_beat_account() {
+    let mut c = with_original(zero());
+    set_caller_gas("favio.testnet", NearToken::from_yoctonear(1), 300);
+    let _ = c.sign_for_beat("1".into(), HASH_A.into());
+    let receipts = get_created_receipts();
+    assert_eq!(receipts.len(), 1);
+    assert_eq!(receipts[0].receiver_id, acc(DEFAULT_MPC_CONTRACT));
+    let call = receipts[0].actions.iter().find_map(|a| match a {
+        near_sdk::mock::MockAction::FunctionCallWeight { method_name, args, attached_deposit, .. } => {
+            Some((String::from_utf8(method_name.clone()).unwrap(), String::from_utf8(args.clone()).unwrap(), *attached_deposit))
+        }
+        _ => None,
+    }).expect("llamada a sign");
+    assert_eq!(call.0, "sign");
+    assert_eq!(call.1, format!(r#"{{"request":{{"payload_v2":{{"Ecdsa":"{HASH_A}"}},"path":"beat-1","domain_id":0}}}}"#));
+    assert_eq!(call.2, NearToken::from_yoctonear(1));
+    assert_eq!(c.beat_account_path("1".into()), "beat-1");
+}
+
+#[test]
+#[should_panic(expected = "Only the NFT owner")]
+fn only_owner_signs_for_beat() {
+    let mut c = with_original(zero());
+    set_caller_gas("ingrid.testnet", NearToken::from_yoctonear(1), 300);
+    let _ = c.sign_for_beat("1".into(), HASH_A.into());
+}
+
+#[test]
+fn new_owner_controls_beat_account_after_transfer() {
+    let mut c = with_original(zero());
+    set_caller("favio.testnet", NearToken::from_yoctonear(1));
+    c.nft_transfer(acc("compradora.testnet"), "1".into(), None, None);
+    set_caller_gas("compradora.testnet", NearToken::from_yoctonear(1), 300);
+    let _ = c.sign_for_beat("1".into(), HASH_B.into());
+    assert_eq!(get_created_receipts().len(), 1);
+}
+
+#[test]
+#[should_panic(expected = "250 Tgas")]
+fn sign_for_beat_needs_gas() {
+    let mut c = with_original(zero());
+    set_caller_gas("favio.testnet", NearToken::from_yoctonear(1), 100);
+    let _ = c.sign_for_beat("1".into(), HASH_A.into());
+}
+
+#[test]
+fn dump_sample_cover() {
+    // Solo para mirar la portada: MSB_DUMP_SVG=/ruta/archivo.svg cargo test dump_sample_cover
+    if let Ok(path) = std::env::var("MSB_DUMP_SVG") {
+        let s = Stats { generation: 1, remix_count: 3, lease_count: 4, total_earned_yocto: 2 * 10u128.pow(24), exclusive_sold: false, credited: true };
+        let art = "32|0.0.0...0.0.0...0.0.0...0.0.0.0.|....2.......2.......2.......2...|4.3.2.1.0.1.2.3.4.5.6.7.6.5.4.3.|6.......4.......5.......3.......";
+        std::fs::write(path, dynamic::svg("Noche en Cochabamba", "7", Some(art), &s)).unwrap();
+    }
 }

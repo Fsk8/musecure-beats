@@ -21,7 +21,7 @@ export async function uploadToIpfs(blob, filename) {
   } catch {
     // respuesta vacía o no JSON
   }
-  if (!r.ok || !data.cid) throw new Error(data.error || `La subida falló (${r.status})`);
+  if (!r.ok || !data.cid) throw new Error(data.error || `Upload failed (${r.status})`);
   return data.cid;
 }
 
@@ -29,7 +29,7 @@ export async function uploadToIpfs(blob, filename) {
 export function nearToYocto(value) {
   const s = String(value ?? '').trim().replace(',', '.');
   if (!s || Number(s) === 0) return '0';
-  if (!/^\d+(\.\d{0,24})?$/.test(s)) throw new Error(`"${value}" no es una cantidad de NEAR válida`);
+  if (!/^\d+(\.\d{0,24})?$/.test(s)) throw new Error(`"${value}" is not a valid NEAR amount`);
   const [whole, frac = ''] = s.split('.');
   return (BigInt(whole) * 10n ** 24n + BigInt(frac.padEnd(24, '0'))).toString();
 }
@@ -44,7 +44,7 @@ export function collectEmails(rowLists) {
     for (const r of rows) {
       const v = r.account.trim().toLowerCase();
       if (!isEmail(v)) continue;
-      if (!EMAIL_RE.test(v)) throw new Error(`"${r.account}" no es un email válido`);
+      if (!EMAIL_RE.test(v)) throw new Error(`"${r.account}" is not a valid email`);
       out.add(v);
     }
   }
@@ -64,9 +64,9 @@ export async function resolveEmails(emails, getAccessToken) {
     body: JSON.stringify({ emails }),
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || `No se pudieron resolver los emails (${r.status})`);
+  if (!r.ok) throw new Error(data.error || `Could not resolve the emails (${r.status})`);
   if (data.failed?.length) {
-    throw new Error(`No se pudo preparar la cuenta de: ${data.failed.join(', ')}. Pídeles que entren una vez a MuSecure Beats con ese email, o usa su cuenta NEAR.`);
+    throw new Error(`Could not prepare an account for: ${data.failed.join(', ')}. Ask them to sign in to MuSecure Beats once with that email, or use their NEAR account.`);
   }
   return data.accounts || {};
 }
@@ -82,19 +82,19 @@ export function toCredits(rows, what, emailMap = {}) {
     const typed = row.account.trim().toLowerCase();
     if (!typed && !row.pct) continue;
     const account = isEmail(typed) ? emailMap[typed] || '' : typed;
-    if (isEmail(typed) && !account) throw new Error(`${what}: falta la cuenta de ${typed}`);
+    if (isEmail(typed) && !account) throw new Error(`${what}: missing account for ${typed}`);
     if (!ACCOUNT_RE.test(account) || account.length < 2 || account.length > 64) {
-      throw new Error(`${what}: "${row.account}" no es una cuenta NEAR válida`);
+      throw new Error(`${what}: "${row.account}" is not a valid NEAR account`);
     }
-    if (seen.has(account)) throw new Error(`${what}: ${typed} aparece dos veces (o es la misma cuenta que otro)`);
+    if (seen.has(account)) throw new Error(`${what}: ${typed} appears twice (or is the same account as another entry)`);
     seen.add(account);
     const bps = Math.round(Number(row.pct) * 100);
-    if (!Number.isFinite(bps) || bps <= 0) throw new Error(`${what}: el porcentaje de ${account} debe ser mayor que 0`);
+    if (!Number.isFinite(bps) || bps <= 0) throw new Error(`${what}: the percentage for ${account} must be greater than 0`);
     total += bps;
     out.push({ account_id: account, bps });
   }
-  if (total > 10000) throw new Error(`${what}: los porcentajes suman más de 100 %`);
-  if (out.length > 10) throw new Error(`${what}: como máximo 10 acreditados`);
+  if (total > 10000) throw new Error(`${what}: percentages add up to more than 100 %`);
+  if (out.length > 10) throw new Error(`${what}: at most 10 credited accounts`);
   return out;
 }
 
@@ -119,7 +119,7 @@ export async function payContract(account, methodName, args, depositYocto = '0')
 export function contractError(failure) {
   const text = JSON.stringify(failure);
   const m = text.match(/Smart contract panicked: ([^"\\]+)/);
-  return m ? m[1] : `El contrato rechazó la operación: ${text}`;
+  return m ? m[1] : `The contract rejected the operation: ${text}`;
 }
 
 /**

@@ -1,13 +1,12 @@
 // Anclar un beat de NEAR en MuSecure (Monad) con Chain Signatures.
 //
-// El usuario firma UNA transacción en NEAR (al contrato MPC v1.signer-prod.testnet). La red MPC
-// devuelve la firma de la transacción de Monad hecha por su dirección EVM derivada.
-// No hay wallets nuevas ni claves EVM: todo sale de su cuenta NEAR de Privy.
+// Cada beat NFT tiene su PROPIA cuenta en Monad: una dirección EVM que la red MPC de NEAR deriva
+// del contrato de Beats y la ruta "beat-<id>". El dueño del NFT firma una transacción en NEAR
+// (sign_for_beat del contrato de Beats) y la red MPC firma la transacción de Monad por el beat.
+// Si el NFT cambia de dueño, el control de esa cuenta (y del certificado de MuSecure) pasa al nuevo dueño.
 
+import { CONTRACT_ID } from './config';
 import { uploadToIpfs } from './register';
-
-export const MPC_CONTRACT = 'v1.signer-prod.testnet';
-export const DERIVATION_PATH = 'musecure';
 export const MONAD_EXPLORER = 'https://testnet.monadscan.com';
 const SIGN_GAS = 300000000000000n; // 300 Tgas: lo que usa la librería oficial (chainsig.js)
 const SIGN_DEPOSIT = 1n; // 1 yoctoNEAR
@@ -24,11 +23,12 @@ export function musecureMetadata(beat, contractId) {
     animation_url: `ipfs://${beat.audio_cid}`,
     attributes: [
       { trait_type: 'Artista', value: beat.creator },
+      { trait_type: 'Beat account', value: 'The NFT\'s own address via NEAR Chain Signatures (path beat-' + beat.token_id + ')' },
       { trait_type: 'Protección', value: 'Público' },
       { trait_type: 'Tipo de Archivo', value: 'audio/wav' },
       { trait_type: 'AudioCID', value: beat.audio_cid },
-      { trait_type: 'Origen', value: 'MuSecure Beats (NEAR)' },
-      { trait_type: 'Análisis de catálogo', value: 'No (creado en el secuenciador)' },
+      { trait_type: 'Origin', value: 'MuSecure Beats (NEAR)' },
+      { trait_type: 'Catalog analysis', value: 'No (created in the sequencer)' },
       { trait_type: 'NEAR contract', value: contractId },
       { trait_type: 'NEAR token', value: beat.token_id },
       { trait_type: 'SHA-256 audio', value: beat.audio_hash },
@@ -48,14 +48,15 @@ async function post(path, body, token) {
   return data;
 }
 
-export const musecureStatus = (fingerprint) => post('/api/musecure-status', { fingerprint });
+/** Cuenta propia del beat en Monad: { evmAddress, balance, registered }. */
+export const beatAccountStatus = (tokenId) => post('/api/musecure-status', { tokenId });
 
 /** base64 → JSON (el resultado de la llamada al contrato MPC). */
 function decodeResult(outcome) {
   const failure = outcome?.status?.Failure;
-  if (failure) throw new Error(`El contrato MPC rechazó la firma: ${JSON.stringify(failure)}`);
+  if (failure) throw new Error(`The MPC contract rejected the signature: ${JSON.stringify(failure)}`);
   const value = outcome?.status?.SuccessValue;
-  if (!value) throw new Error('El contrato MPC no devolvió una firma');
+  if (!value) throw new Error('The MPC contract returned no signature');
   return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(value), (c) => c.charCodeAt(0))));
 }
 
@@ -64,26 +65,24 @@ function decodeResult(outcome) {
  * @returns {{ hash: string, evmAddress: string }}
  */
 export async function anchorInMusecure({ account, accountId, beat, contractId, getAccessToken, onStep }) {
-  onStep('Subiendo metadata en formato MuSecure…');
+  onStep('Uploading MuSecure-format metadata…');
   const meta = new Blob([JSON.stringify(musecureMetadata(beat, contractId))], { type: 'application/json' });
   const metadataCid = await uploadToIpfs(meta, `metadata_${beat.token_id}.json`);
 
-  onStep('Preparando: dirección EVM, gas y firma de MuSecure…');
-  const prep = await post('/api/musecure-prepare', {
-    accountId, fingerprint: beat.musecure_fingerprint, metadataCid,
-  }, await getAccessToken());
+  onStep('Preparing: EVM address, gas and MuSecure signature…');
+  const prep = await post('/api/musecure-prepare', { accountId, tokenId: beat.token_id, metadataCid }, await getAccessToken());
 
-  onStep('Firmando con Chain Signatures (red MPC de NEAR)…');
+  onStep('Signing for the beat account (Chain Signatures)…');
   const outcome = await account.callFunctionRaw({
-    contractId: MPC_CONTRACT,
-    methodName: 'sign',
-    args: { request: { payload_v2: { Ecdsa: prep.payload }, path: DERIVATION_PATH, domain_id: 0 } },
+    contractId: CONTRACT_ID,
+    methodName: 'sign_for_beat',
+    args: { token_id: beat.token_id, payload: prep.payload },
     gas: SIGN_GAS,
     deposit: SIGN_DEPOSIT,
   });
   const signature = decodeResult(outcome);
 
-  onStep('Enviando a Monad…');
-  const sent = await post('/api/musecure-broadcast', { accountId, tx: prep.tx, signature }, await getAccessToken());
+  onStep('Sending to Monad…');
+  const sent = await post('/api/musecure-broadcast', { accountId, tokenId: beat.token_id, tx: prep.tx, signature }, await getAccessToken());
   return { hash: sent.hash, evmAddress: prep.evmAddress, nearTx: outcome?.transaction?.hash };
 }

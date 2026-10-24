@@ -42,18 +42,18 @@ async function accountExists(provider, accountId) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'Usa POST' });
+    return res.status(405).json({ error: 'Use POST' });
   }
   const missing = ['NEAR_SPONSOR_ACCOUNT_ID', 'NEAR_SPONSOR_PRIVATE_KEY', 'VITE_PRIVY_APP_ID']
     .filter((k) => !process.env[k]);
   if (!process.env.PRIVY_JWKS_URL && !process.env.PRIVY_VERIFICATION_KEY) missing.push('PRIVY_JWKS_URL');
-  if (missing.length) return res.status(500).json({ error: `Faltan variables en el servidor: ${missing.join(', ')}` });
+  if (missing.length) return res.status(500).json({ error: `Missing server variables: ${missing.join(', ')}` });
 
   try {
     const userDid = await verifyPrivy(req);
     const { accountId } = await readJson(req);
     if (!IMPLICIT_RE.test(String(accountId || ''))) {
-      return res.status(400).json({ error: 'Solo se activan cuentas implícitas de Privy (64 caracteres hex)' });
+      return res.status(400).json({ error: 'Only Privy implicit accounts (64 hex characters) can be activated' });
     }
 
     const provider = new JsonRpcProvider({ url: RPC_URL });
@@ -70,6 +70,6 @@ export default async function handler(req, res) {
     console.log(`Cuenta activada ${accountId} para ${userDid}`);
     return res.status(200).json({ activated: true, txHash: outcome?.transaction?.hash || null });
   } catch (err) {
-    return res.status(err.status || 500).json({ error: err.message || 'No se pudo activar la cuenta' });
+    return res.status(err.status || 500).json({ error: err.message || 'Could not activate the account' });
   }
 }

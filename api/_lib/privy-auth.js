@@ -12,7 +12,7 @@ function getJwks(url) {
 export async function verifyPrivy(req) {
   const auth = String(req.headers.authorization || '');
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (!token) throw Object.assign(new Error('Falta la sesión de Privy'), { status: 401 });
+  if (!token) throw Object.assign(new Error('Missing Privy session'), { status: 401 });
   const key = process.env.PRIVY_JWKS_URL
     ? getJwks(process.env.PRIVY_JWKS_URL)
     : await importSPKI((process.env.PRIVY_VERIFICATION_KEY || '').replace(/\\n/g, '\n'), 'ES256');
@@ -24,7 +24,7 @@ export async function verifyPrivy(req) {
     });
     return payload.sub;
   } catch {
-    throw Object.assign(new Error('Sesión de Privy inválida o vencida. Vuelve a iniciar sesión.'), { status: 401 });
+    throw Object.assign(new Error('Invalid or expired Privy session. Please sign in again.'), { status: 401 });
   }
 }
 

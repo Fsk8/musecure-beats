@@ -18,7 +18,7 @@ async function readBody(req) {
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > MAX_BYTES) throw Object.assign(new Error('El archivo supera 4 MB'), { status: 413 });
+    if (size > MAX_BYTES) throw Object.assign(new Error('The file exceeds 4 MB'), { status: 413 });
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
@@ -27,21 +27,21 @@ async function readBody(req) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'Usa POST' });
+    return res.status(405).json({ error: 'Use POST' });
   }
 
   const apiKey = process.env.LIGHTHOUSE_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'Falta LIGHTHOUSE_API_KEY en el servidor' });
+  if (!apiKey) return res.status(500).json({ error: 'LIGHTHOUSE_API_KEY is missing on the server' });
 
   const type = String(req.headers['content-type'] || '').split(';')[0].trim();
-  if (!ALLOWED_TYPES.has(type)) return res.status(415).json({ error: 'Solo se aceptan WAV y JSON' });
+  if (!ALLOWED_TYPES.has(type)) return res.status(415).json({ error: 'Only WAV and JSON are accepted' });
 
   const name = String(req.headers['x-filename'] || 'archivo').replace(/[^\w.-]/g, '_').slice(0, 80);
 
   try {
     const body = await readBody(req);
-    if (!body.length) return res.status(400).json({ error: 'El archivo está vacío' });
-    if (body.length > MAX_BYTES) return res.status(413).json({ error: 'El archivo supera 4 MB' });
+    if (!body.length) return res.status(400).json({ error: 'The file is empty' });
+    if (body.length > MAX_BYTES) return res.status(413).json({ error: 'The file exceeds 4 MB' });
 
     const form = new FormData();
     form.append('file', new Blob([body], { type }), name);
@@ -53,14 +53,14 @@ export default async function handler(req, res) {
         body: form,
       });
     } catch {
-      return res.status(502).json({ error: 'No se pudo conectar con Lighthouse. Revisa tu conexión e inténtalo de nuevo.' });
+      return res.status(502).json({ error: 'Could not reach Lighthouse. Check your connection and try again.' });
     }
     const text = await r.text();
-    if (!r.ok) return res.status(502).json({ error: `Lighthouse respondió ${r.status}: ${text.slice(0, 200)}` });
+    if (!r.ok) return res.status(502).json({ error: `Lighthouse replied ${r.status}: ${text.slice(0, 200)}` });
 
     const data = JSON.parse(text);
     return res.status(200).json({ cid: data.Hash, name: data.Name, size: Number(data.Size) });
   } catch (err) {
-    return res.status(err.status || 500).json({ error: err.message || 'Error al subir' });
+    return res.status(err.status || 500).json({ error: err.message || 'Upload error' });
   }
 }

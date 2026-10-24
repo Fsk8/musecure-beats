@@ -4,8 +4,8 @@ import { usePlayhead } from '../audio/playhead';
 import { Panel } from './Panel';
 
 const HINTS = {
-  vel: 'Clic: nota fuerte · segundo clic: suave · tercer clic: apagar',
-  prob: 'Clic en una nota: cambia la probabilidad 100 → 75 → 50 → 25 %. El número indica cuántas veces de cada 100 suena.',
+  vel: 'Click: strong note · second click: soft · third click: off',
+  prob: 'Click a note to change its probability 100 → 75 → 50 → 25 %. The number shows how many times out of 100 it plays.',
 };
 
 export function TrackEditor({
@@ -15,7 +15,7 @@ export function TrackEditor({
   const t = S.tab;
 
   return (
-    <Panel id="tracks" title="Pistas" summary={`Editando ${TRACKS[t].name} · ${S.len} pasos`}>
+    <Panel id="tracks" title="Tracks" summary={`Editing ${TRACKS[t].name} · ${S.len} steps`}>
       <div className="bar spread">
         <div className="tabs" role="tablist">
           {TRACKS.map((tr, i) => (
@@ -28,32 +28,32 @@ export function TrackEditor({
         </div>
         <div className="bar">
           <label htmlFor="emode">
-            Clic edita
+            Click edits
             <select id="emode" value={S.emode} onChange={(e) => mutate((d) => { d.emode = e.target.value; })}>
-              <option value="vel">Velocidad</option>
-              <option value="prob">Probabilidad</option>
+              <option value="vel">Velocity</option>
+              <option value="prob">Probability</option>
             </select>
           </label>
           <label htmlFor="follow">
             <input type="checkbox" id="follow" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
-            Seguir
+            Follow
           </label>
         </div>
       </div>
 
       <div className="bar">
         <label htmlFor="qgrid">
-          Alinear a
+          Quantize to
           <select id="qgrid" value={qGrid} onChange={(e) => setQGrid(+e.target.value)}>
-            <option value="2">Corcheas (cada 2 pasos)</option>
-            <option value="4">Negras (cada 4 pasos)</option>
+            <option value="2">Eighths (every 2 steps)</option>
+            <option value="4">Quarters (every 4 steps)</option>
           </select>
         </label>
-        <button onClick={onQuantize}>Alinear pista</button>
-        <button onClick={onUndo} disabled={!canUndo}>Deshacer</button>
-        <span className="label">Correr pista</span>
-        <button onClick={() => onShift(-1)} aria-label="Correr la pista un paso a la izquierda" title="Un paso antes">◀</button>
-        <button onClick={() => onShift(1)} aria-label="Correr la pista un paso a la derecha" title="Un paso después">▶</button>
+        <button onClick={onQuantize}>Quantize track</button>
+        <button onClick={onUndo} disabled={!canUndo}>Undo</button>
+        <span className="label">Shift track</span>
+        <button onClick={() => onShift(-1)} aria-label="Shift track one step left" title="One step earlier">◀</button>
+        <button onClick={() => onShift(1)} aria-label="Shift track one step right" title="One step later">▶</button>
         <span className="hint" aria-live="polite">{qMessage}</span>
       </div>
 
@@ -94,7 +94,7 @@ const PlayGrid = memo(function PlayGrid({ track, names, G, P, page, len, follow,
         <div className="pages">
           {[...Array(pageCount).keys()].map((p) => (
             <button key={p} className={`page${livePage === p ? ' live' : ''}${dragFrom === p ? ' dragging' : ''}`} aria-current={page === p}
-              draggable title="Arrastra para cambiar el orden de los compases"
+              draggable title="Drag to reorder bars"
               onDragStart={(e) => { setDragFrom(p); e.dataTransfer.effectAllowed = 'move'; }}
               onDragOver={(e) => { if (dragFrom !== null) e.preventDefault(); }}
               onDrop={(e) => { e.preventDefault(); if (dragFrom !== null) onMoveBar(dragFrom, p, allTracks); setDragFrom(null); }}
@@ -105,7 +105,7 @@ const PlayGrid = memo(function PlayGrid({ track, names, G, P, page, len, follow,
           ))}
           <label htmlFor="moveAll" className="hint">
             <input type="checkbox" id="moveAll" checked={allTracks} onChange={(e) => setAllTracks(e.target.checked)} />
-            Mover compases en todas las pistas
+            Move bars on all tracks
           </label>
         </div>
       )}
@@ -136,7 +136,7 @@ function Row({ name, r, dead, G, P, page, step, onCell }) {
           .filter(Boolean).join(' ');
         return (
           <button key={c} className={cls} disabled={dead} aria-pressed={g > 0}
-            aria-label={`${name} paso ${c + 1}${g === 2 ? ' suave' : ''}${showProb ? `, ${p}%` : ''}`}
+            aria-label={`${name} step ${c + 1}${g === 2 ? ' soft' : ''}${showProb ? `, ${p}%` : ''}`}
             onClick={() => onCell(r, c)}>
             {showProb ? p : ''}
           </button>

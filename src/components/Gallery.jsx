@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Panel } from './Panel';
 import { useNear } from '../near/NearProvider';
-import { getBeats, hasLease, yoctoToNear } from '../near/contract';
+import { getBeatMedia, getBeats, hasLease, yoctoToNear } from '../near/contract';
 import { CONTRACT_ID, explorerAccountUrl, explorerNftUrl, explorerTokenUrl, explorerTxUrl, shortAccount } from '../near/config';
 import { fetchIpfs, ipfsUrl } from '../near/ipfs';
 import { nearToYocto, payContract, sha256Hex } from '../near/register';
-import { MONAD_EXPLORER, anchorInMusecure, musecureStatus } from '../near/musecure';
+import { MONAD_EXPLORER, anchorInMusecure, beatAccountStatus } from '../near/musecure';
 
 const pct = (bps) => `${(bps / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })} %`;
 
@@ -24,7 +24,7 @@ function Hash({ label, value }) {
     <div className="hash-row">
       <span className="label">{label}</span>
       <code title={value}>{value.slice(0, 10)}…{value.slice(-6)}</code>
-      <button className="mini" onClick={copy} aria-label={`Copiar ${label}`}>{copied ? '✓' : 'Copiar'}</button>
+      <button className="mini" onClick={copy} aria-label={`Copy ${label}`}>{copied ? '✓' : 'Copy'}</button>
     </div>
   );
 }
@@ -36,7 +36,7 @@ function Account({ id }) {
 function CreditsView({ credits }) {
   if (credits?.Whole) {
     const list = credits.Whole.credits;
-    if (!list.length) return <p className="hint">Sin acreditados: 100 % del autor.</p>;
+    if (!list.length) return <p className="hint">No credits: 100 % to the creator.</p>;
     return (
       <ul className="credit-list">
         {list.map((c) => <li key={c.account_id}><Account id={c.account_id} /> · {pct(c.bps)}</li>)}
@@ -51,7 +51,7 @@ function CreditsView({ credits }) {
             <strong>{t.name}</strong> ({pct(t.weight_bps)}):{' '}
             {t.credits.length ? t.credits.map((c, i) => (
               <span key={c.account_id}>{i > 0 && ', '}<Account id={c.account_id} /> {pct(c.bps)}</span>
-            )) : 'del autor'}
+            )) : 'creator'}
           </li>
         ))}
       </ul>
@@ -78,10 +78,10 @@ function VerifyAudio({ beat }) {
   return (
     <div className="bar">
       <button onClick={verify} disabled={state === 'checking'}>
-        {state === 'checking' ? 'Verificando…' : 'Verificar audio'}
+        {state === 'checking' ? 'Verifying…' : 'Verify audio'}
       </button>
-      {state === 'ok' && <span className="ok-text">✓ El audio en IPFS coincide con el hash registrado</span>}
-      {state === 'mismatch' && <span className="warn-text">✗ El audio no coincide con el hash registrado</span>}
+      {state === 'ok' && <span className="ok-text">✓ The audio on IPFS matches the registered hash</span>}
+      {state === 'mismatch' && <span className="warn-text">✗ The audio does not match the registered hash</span>}
       {state.startsWith('error:') && <span className="hint">{state.slice(6)}</span>}
     </div>
   );
@@ -111,10 +111,10 @@ function LeaseBox({ beat: b, onChanged }) {
   async function buy() {
     setError('');
     if (balance !== null && Number(yoctoToNear(b.lease_price, 6)) + 0.01 > balance) {
-      setError(`No te alcanza el saldo: la licencia cuesta ${price} Ⓝ y tienes ${balance.toFixed(3)} Ⓝ`);
+      setError(`Not enough balance: the license costs ${price} Ⓝ and you have ${balance.toFixed(3)} Ⓝ`);
       return;
     }
-    if (!window.confirm(`Comprar la licencia no exclusiva de "${b.title}" por ${price} Ⓝ?`)) return;
+    if (!window.confirm(`Buy the non-exclusive license for "${b.title}" for ${price} Ⓝ?`)) return;
     setBusy(true);
     try {
       setTxHash(await payContract(account, 'buy_lease', { token_id: b.token_id }, b.lease_price));
@@ -129,41 +129,49 @@ function LeaseBox({ beat: b, onChanged }) {
   }
 
   let action;
-  if (owned) action = <span className="ok-text">✓ Tienes la licencia no exclusiva de este beat</span>;
-  else if (accountId && accountId === b.owner_id) action = <span className="hint">Eres el dueño: no necesitas licencia.</span>;
-  else if (status === 'signed-out') action = <button onClick={login}>Entrar para comprar la licencia ({price} Ⓝ)</button>;
-  else if (status !== 'active') action = <span className="hint">Activa tu cuenta para comprar la licencia.</span>;
-  else action = <button className="primary" onClick={buy} disabled={busy}>{busy ? 'Comprando…' : `Comprar licencia no exclusiva · ${price} Ⓝ`}</button>;
+  if (owned) action = <span className="ok-text">✓ You hold a non-exclusive license for this beat</span>;
+  else if (accountId && accountId === b.owner_id) action = <span className="hint">You are the owner: no license needed.</span>;
+  else if (status === 'signed-out') action = <button onClick={login}>Sign in to buy the license ({price} Ⓝ)</button>;
+  else if (status !== 'active') action = <span className="hint">Activate your account to buy the license.</span>;
+  else action = <button className="primary" onClick={buy} disabled={busy}>{busy ? 'Buying…' : `Buy non-exclusive license · ${price} Ⓝ`}</button>;
 
   return (
     <div className="lease-box">
       {action}
-      {txHash && <a className="hint" href={explorerTxUrl(txHash)} target="_blank" rel="noreferrer">Ver transacción</a>}
+      {txHash && <a className="hint" href={explorerTxUrl(txHash)} target="_blank" rel="noreferrer">View transaction</a>}
       {error && <span className="hint warn-text">{error}</span>}
     </div>
   );
 }
 
 /**
- * Registrar el beat en MuSecure (Monad) con Chain Signatures: la cuenta NEAR del autor firma,
- * a través de la red MPC de NEAR, una transacción en Monad desde su dirección EVM derivada.
+ * Cuenta propia del NFT en Monad (Chain Signatures) y registro en MuSecure desde ella.
+ * Solo el dueño actual del NFT puede usarla: si el NFT se vende, el control pasa al comprador.
  */
 function AnchorBox({ beat: b }) {
   const { status, account, accountId, getAccessToken, refresh } = useNear();
   const [registered, setRegistered] = useState(null);
+  const [acct, setAcct] = useState(null);
   const [step, setStep] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!b.musecure_fingerprint) return;
     let alive = true;
-    musecureStatus(b.musecure_fingerprint).then((r) => alive && setRegistered(r.registered)).catch(() => alive && setRegistered(null));
+    beatAccountStatus(b.token_id)
+      .then((r) => { if (alive) { setAcct(r); setRegistered(r.registered); } })
+      .catch(() => alive && setRegistered(null));
     return () => { alive = false; };
-  }, [b.musecure_fingerprint]);
+  }, [b.token_id]);
 
-  if (!b.musecure_fingerprint) return <p className="hint">Este beat no tiene huella MuSecure: no se puede registrar en MuSecure.</p>;
-  const mine = accountId && accountId === b.creator;
+  const mine = accountId && accountId === b.owner_id;
+  const accountLine = acct && (
+    <span className="hint">
+      NFT account on Monad: <a href={`${MONAD_EXPLORER}/address/${acct.evmAddress}`} target="_blank" rel="noreferrer">{acct.evmAddress.slice(0, 8)}…{acct.evmAddress.slice(-6)}</a>
+      {' '}· {Number(acct.balance).toFixed(3)} MON · controlled by the NFT owner
+    </span>
+  );
+  if (!b.musecure_fingerprint) return <div className="lease-box">{accountLine}<span className="hint">No MuSecure fingerprint: cannot be registered on MuSecure.</span></div>;
 
   async function anchor() {
     setError('');
@@ -183,18 +191,19 @@ function AnchorBox({ beat: b }) {
 
   return (
     <div className="lease-box">
-      {registered === true && <span className="ok-text">✓ Registrado en MuSecure (Monad)</span>}
-      {registered === false && !mine && <span className="hint">Aún no está registrado en MuSecure.</span>}
+      {accountLine}
+      {registered === true && <span className="ok-text">✓ Registered on MuSecure (Monad) under the NFT account</span>}
+      {registered === false && !mine && <span className="hint">Not registered on MuSecure yet.</span>}
       {registered === false && mine && status === 'active' && (
-        <button onClick={anchor} disabled={Boolean(step)} title="Firma con tu cuenta NEAR, vía Chain Signatures, el registro en MuSecure (Monad)">
-          {step || 'Registrar en MuSecure (Monad) con Chain Signatures'}
+        <button onClick={anchor} disabled={Boolean(step)} title="Sign the MuSecure (Monad) registration from the NFT account, via Chain Signatures">
+          {step || 'Register on MuSecure from the NFT account'}
         </button>
       )}
       {result && (
         <span className="hint">
-          <a href={`${MONAD_EXPLORER}/tx/${result.hash}`} target="_blank" rel="noreferrer">Transacción en Monad</a>
-          {result.nearTx && <> · <a href={explorerTxUrl(result.nearTx)} target="_blank" rel="noreferrer">Firma en NEAR</a></>}
-          {' · '}desde <a href={`${MONAD_EXPLORER}/address/${result.evmAddress}`} target="_blank" rel="noreferrer">tu dirección EVM derivada</a>
+          <a href={`${MONAD_EXPLORER}/tx/${result.hash}`} target="_blank" rel="noreferrer">Monad transaction</a>
+          {result.nearTx && <> · <a href={explorerTxUrl(result.nearTx)} target="_blank" rel="noreferrer">NEAR signature</a></>}
+          {' · '}from <a href={`${MONAD_EXPLORER}/address/${result.evmAddress}`} target="_blank" rel="noreferrer">the NFT account</a>
         </span>
       )}
       {error && <span className="hint warn-text">{error}</span>}
@@ -208,14 +217,14 @@ function SupportBox({ beat: b, onChanged }) {
   const [amount, setAmount] = useState('0.1');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
-  if (status !== 'active') return <p className="hint">Inicia sesión para apoyar este beat.</p>;
+  if (status !== 'active') return <p className="hint">Sign in to support this beat.</p>;
 
   async function support() {
     setMsg(null);
     try {
       const yocto = nearToYocto(amount);
-      if (yocto === '0') throw new Error('Escribe cuánto NEAR quieres enviar');
-      if (balance !== null && Number(amount.replace(',', '.')) + 0.01 > balance) throw new Error(`No te alcanza el saldo (${balance.toFixed(3)} Ⓝ)`);
+      if (yocto === '0') throw new Error('Enter how much NEAR to send');
+      if (balance !== null && Number(amount.replace(',', '.')) + 0.01 > balance) throw new Error(`Not enough balance (${balance.toFixed(3)} Ⓝ)`);
       setBusy(true);
       const tx = await payContract(account, 'support', { token_id: b.token_id }, yocto);
       setMsg({ ok: true, tx });
@@ -230,12 +239,12 @@ function SupportBox({ beat: b, onChanged }) {
 
   return (
     <div className="lease-box">
-      <label htmlFor={`sup-${b.token_id}`}>Apoyar con
+      <label htmlFor={`sup-${b.token_id}`}>Support with
         <input id={`sup-${b.token_id}`} className="text pct" type="number" min="0" step="0.01" value={amount}
           onChange={(e) => setAmount(e.target.value)} /> Ⓝ
       </label>
-      <button onClick={support} disabled={busy}>{busy ? 'Enviando…' : 'Apoyar'}</button>
-      {msg?.ok && <span className="ok-text">✓ ¡Gracias! <a href={explorerTxUrl(msg.tx)} target="_blank" rel="noreferrer">Ver transacción</a></span>}
+      <button onClick={support} disabled={busy}>{busy ? 'Sending…' : 'Support'}</button>
+      {msg?.ok && <span className="ok-text">✓ Thank you! <a href={explorerTxUrl(msg.tx)} target="_blank" rel="noreferrer">View transaction</a></span>}
       {msg && !msg.ok && <span className="hint warn-text">{msg.text}</span>}
     </div>
   );
@@ -268,16 +277,29 @@ function ClaimBox({ beat: b, onChanged }) {
 
   return (
     <div className="lease-box">
-      {b.authors_balance !== '0' && <span>Saldo de autores por repartir: <strong>{yoctoToNear(b.authors_balance)} Ⓝ</strong></span>}
+      {b.authors_balance !== '0' && <span>Authors' balance to distribute: <strong>{yoctoToNear(b.authors_balance)} Ⓝ</strong></span>}
       {b.authors_balance !== '0' && status === 'active' && (
-        <button onClick={claim} disabled={busy} title="Envía a cada acreditado su parte. Cualquiera puede hacerlo.">
-          {busy ? 'Repartiendo…' : 'Repartir a los autores'}
+        <button onClick={claim} disabled={busy} title="Sends each credited account its share. Anyone can do it.">
+          {busy ? 'Distributing…' : 'Distribute to authors'}
         </button>
       )}
-      {msg?.ok && <span className="ok-text">✓ Repartido <a href={explorerTxUrl(msg.tx)} target="_blank" rel="noreferrer">Ver transacción</a></span>}
+      {msg?.ok && <span className="ok-text">✓ Distributed <a href={explorerTxUrl(msg.tx)} target="_blank" rel="noreferrer">View transaction</a></span>}
       {msg && !msg.ok && <span className="hint warn-text">{msg.text}</span>}
     </div>
   );
+}
+
+/** Portada dinámica generada por el contrato (SVG on chain con las notas, nivel e insignias). */
+function Cover({ beat: b }) {
+  const { provider } = useNear();
+  const [src, setSrc] = useState('');
+  useEffect(() => {
+    let alive = true;
+    getBeatMedia(provider, b.token_id).then((m) => alive && setSrc(m)).catch(() => {});
+    return () => { alive = false; };
+  }, [provider, b.token_id, b.level, b.remix_count, b.lease_count, b.total_earned]);
+  if (!src) return null;
+  return <img className="cover" src={src} alt={`NFT #${b.token_id} cover: ${b.title}`} loading="lazy" />;
 }
 
 function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged }) {
@@ -299,53 +321,55 @@ function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged }) {
 
   return (
     <li className="beat-card">
+      <Cover beat={b} />
       <div className="beat-top">
         <strong>{b.title}</strong>
-        <span className="num">#{b.token_id}</span>
+        <span className="num">#{b.token_id}{b.level ? ` · Lv ${b.level}` : ''}</span>
       </div>
+      {b.badges?.length > 0 && <div className="badges">{b.badges.map((x) => <span key={x} className="badge">{x}</span>)}</div>}
       <div className="beat-meta">
-        <span>Autor: <Account id={b.creator} /></span>
-        {b.owner_id !== b.creator && <span>Dueño: <Account id={b.owner_id} /></span>}
-        {b.parent_id && <span>Remix de #{b.parent_id}</span>}
+        <span>Creator: <Account id={b.creator} /></span>
+        {b.owner_id !== b.creator && <span>Owner: <Account id={b.owner_id} /></span>}
+        {b.parent_id && <span>Remix of #{b.parent_id}</span>}
         {b.remix_count > 0 && <span>{b.remix_count} remix{b.remix_count > 1 ? 'es' : ''}</span>}
         <span>{new Date(Number(b.created_at_ms)).toLocaleDateString()}</span>
       </div>
       <div className="bar">
-        <button className={playing ? 'primary' : ''} onClick={() => onPlay(b)}>{playing ? '■ Parar' : '▶ Escuchar'}</button>
+        <button className={playing ? 'primary' : ''} onClick={() => onPlay(b)}>{playing ? '■ Stop' : '▶ Listen'}</button>
         <button onClick={openProject} disabled={opening || !b.remix_allowed}
-          title={b.remix_allowed ? 'Abre el proyecto en el secuenciador; al registrarlo queda como remix de este beat' : 'El dueño no permite remixes'}>
-          {opening ? 'Abriendo…' : !b.remix_allowed ? 'Remix no permitido'
-            : `Remixar${b.remix_price === '0' ? ' (libre)' : ` (${yoctoToNear(b.remix_price)} Ⓝ)`}`}
+          title={b.remix_allowed ? 'Opens the project in the sequencer; when registered it becomes a remix of this beat' : 'The owner does not allow remixes'}>
+          {opening ? 'Opening…' : !b.remix_allowed ? 'Remix not allowed'
+            : `Remix${b.remix_price === '0' ? ' (free)' : ` (${yoctoToNear(b.remix_price)} Ⓝ)`}`}
         </button>
-        <button aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Ocultar detalles' : 'Detalles'}</button>
+        <button aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide details' : 'Details'}</button>
       </div>
       {openError && <p className="hint warn-text">{openError}</p>}
       <LeaseBox beat={b} onChanged={onChanged} />
       {open && (
         <div className="beat-details">
           <div className="beat-meta">
-            <span>Remix: {b.remix_allowed ? (b.remix_price === '0' ? 'libre' : `${yoctoToNear(b.remix_price)} Ⓝ`) : 'no permitido'}</span>
-            <span>Licencia no exclusiva: {b.exclusive_sold ? 'cerrada (vendido en exclusiva)' : b.lease_price === '0' ? 'no a la venta' : `${yoctoToNear(b.lease_price)} Ⓝ`}</span>
-            {b.lease_count > 0 && <span>{b.lease_count} licencias vendidas</span>}
-            {b.sale_price && <span>En venta (exclusiva): {yoctoToNear(b.sale_price)} Ⓝ</span>}
-            {b.total_earned !== '0' && <span>Ganado: {yoctoToNear(b.total_earned)} Ⓝ</span>}
+            <span>Remix: {b.remix_allowed ? (b.remix_price === '0' ? 'free' : `${yoctoToNear(b.remix_price)} Ⓝ`) : 'not allowed'}</span>
+            <span>Non-exclusive license: {b.exclusive_sold ? 'closed (exclusive sold)' : b.lease_price === '0' ? 'not for sale' : `${yoctoToNear(b.lease_price)} Ⓝ`}</span>
+            {b.lease_count > 0 && <span>{b.lease_count} licenses sold</span>}
+            {b.sale_price && <span>For sale (exclusive): {yoctoToNear(b.sale_price)} Ⓝ</span>}
+            {b.total_earned !== '0' && <span>Earned: {yoctoToNear(b.total_earned)} Ⓝ</span>}
           </div>
-          <span className="label">Créditos</span>
+          <span className="label">Credits</span>
           <CreditsView credits={b.credits} />
           <ClaimBox beat={b} onChanged={onChanged} />
-          <span className="label">Apoyar</span>
-          <p className="hint">La mitad va al dueño del NFT y la mitad a los autores (y, si es remix, una parte sube al original).</p>
+          <span className="label">Support</span>
+          <p className="hint">Half goes to the NFT owner and half to the authors (if it is a remix, a share flows up to the original).</p>
           <SupportBox beat={b} onChanged={onChanged} />
-          <span className="label">Huellas</span>
-          <Hash label="SHA-256 del audio" value={b.audio_hash} />
-          <Hash label="SHA-256 del proyecto" value={b.project_hash} />
-          <Hash label="Huella MuSecure" value={b.musecure_fingerprint} />
+          <span className="label">Fingerprints</span>
+          <Hash label="Audio SHA-256" value={b.audio_hash} />
+          <Hash label="Project SHA-256" value={b.project_hash} />
+          <Hash label="MuSecure fingerprint" value={b.musecure_fingerprint} />
           <div className="beat-meta">
-            <a href={explorerTokenUrl(CONTRACT_ID, b.token_id)} target="_blank" rel="noreferrer">NFT en NearBlocks</a>
-            <a href={explorerAccountUrl(b.creator)} target="_blank" rel="noreferrer">Transacciones del autor</a>
-            <a href={ipfsUrl(b.audio_cid)} target="_blank" rel="noreferrer">Audio en IPFS</a>
-            <a href={ipfsUrl(b.project_cid)} target="_blank" rel="noreferrer">Proyecto en IPFS</a>
-            {b.license_uri && <a href={b.license_uri.replace(/^ipfs:\/\//, ipfsUrl(''))} target="_blank" rel="noreferrer">Licencia</a>}
+            <a href={explorerTokenUrl(CONTRACT_ID, b.token_id)} target="_blank" rel="noreferrer">NFT on NearBlocks</a>
+            <a href={explorerAccountUrl(b.creator)} target="_blank" rel="noreferrer">Creator transactions</a>
+            <a href={ipfsUrl(b.audio_cid)} target="_blank" rel="noreferrer">Audio on IPFS</a>
+            <a href={ipfsUrl(b.project_cid)} target="_blank" rel="noreferrer">Project on IPFS</a>
+            {b.license_uri && <a href={b.license_uri.replace(/^ipfs:\/\//, ipfsUrl(''))} target="_blank" rel="noreferrer">License</a>}
           </div>
           <VerifyAudio beat={b} />
           <span className="label">MuSecure (Monad)</span>
@@ -369,7 +393,7 @@ export function Gallery({ onOpenProject }) {
     try {
       setBeats(await getBeats(provider, 24));
     } catch (e) {
-      setError(`No se pudo leer el contrato: ${e?.message || e}`);
+      setError(`Could not read the contract: ${e?.message || e}`);
     }
   }, [provider]);
 
@@ -397,7 +421,7 @@ export function Gallery({ onOpenProject }) {
     window.dispatchEvent(new Event('msb:stop-sequencer'));
     a.src = ipfsUrl(b.audio_cid);
     a.loop = true;
-    a.play().catch((e) => setError(`No se pudo reproducir: ${e?.message || e}`));
+    a.play().catch((e) => setError(`Could not play: ${e?.message || e}`));
     setPlayingId(b.token_id);
   }
 
@@ -413,20 +437,20 @@ export function Gallery({ onOpenProject }) {
     onOpenProject(text, b);
   }
 
-  const summary = beats ? `${beats.length} ${beats.length === 1 ? 'beat' : 'beats'} en NEAR testnet` : 'Cargando…';
+  const summary = beats ? `${beats.length} ${beats.length === 1 ? 'beat' : 'beats'} on NEAR testnet` : 'Loading…';
 
   return (
-    <Panel plain id="gallery" title="Beats en NEAR" summary={summary}>
+    <Panel plain id="gallery" title="Beats on NEAR" summary={summary}>
       <div className="bar spread">
         <span className="hint">
-          <a href={explorerAccountUrl(CONTRACT_ID)} target="_blank" rel="noreferrer">Contrato: {CONTRACT_ID}</a>
+          <a href={explorerAccountUrl(CONTRACT_ID)} target="_blank" rel="noreferrer">Contract: {CONTRACT_ID}</a>
           {' · '}
-          <a href={explorerNftUrl(CONTRACT_ID)} target="_blank" rel="noreferrer">Colección NFT</a>
+          <a href={explorerNftUrl(CONTRACT_ID)} target="_blank" rel="noreferrer">NFT collection</a>
         </span>
-        <button onClick={load}>Actualizar</button>
+        <button onClick={load}>Refresh</button>
       </div>
       {error && <p className="hint">{error}</p>}
-      {beats && beats.length === 0 && <p className="hint">Todavía no hay beats registrados.</p>}
+      {beats && beats.length === 0 && <p className="hint">No beats registered yet.</p>}
       {beats && beats.length > 0 && (
         <ul className="beat-list">
           {beats.map((b) => (

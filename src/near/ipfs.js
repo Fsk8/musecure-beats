@@ -21,5 +21,5 @@ export async function fetchIpfs(cid) {
       lastError = e;
     }
   }
-  throw new Error(`No se pudo descargar de IPFS (${lastError?.message || lastError})`);
+  throw new Error(`Could not download from IPFS (${lastError?.message || lastError})`);
 }
