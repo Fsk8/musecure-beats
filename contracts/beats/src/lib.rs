@@ -71,6 +71,7 @@ enum StorageKey {
     OwnerEarnings,
     Leases,
     ByFingerprint,
+    Sealed,
 }
 
 /// A quién va una parte de los ingresos de autoría: una cuenta o otro beat (el original de un remix).
@@ -194,6 +195,8 @@ pub struct BeatView {
     pub exclusive_sold: bool,
     pub musecure_fingerprint: Option<String>,
     pub art: Option<String>,
+    /// CID del proyecto cifrado si está sellado (solo el dueño del NFT puede abrirlo).
+    pub sealed_cid: Option<String>,
     /// NFT dinámico: nivel (1–10) e insignias, calculados en cada lectura.
     pub level: u32,
     pub badges: Vec<String>,
@@ -221,6 +224,23 @@ pub struct Contract {
     by_fingerprint: LookupMap<String, Vec<TokenId>>,
     next_id: u64,
     /// Contrato MPC de Chain Signatures: firma por la cuenta propia de cada beat en otras blockchains.
+    mpc_contract: AccountId,
+    /// Proyecto sellado: CID del proyecto cifrado (Lighthouse) a nombre de la cuenta propia del beat.
+    /// Solo quien puede firmar por esa cuenta (el dueño del NFT) obtiene la llave.
+    sealed: LookupMap<TokenId, String>,
+}
+
+/// Estado de la v2 (antes de los proyectos sellados), para migrar sin perder beats.
+#[near(serializers = [borsh])]
+struct ContractV2 {
+    tokens: NonFungibleToken,
+    metadata: LazyOption<NFTContractMetadata>,
+    beats: LookupMap<TokenId, Beat>,
+    remixes: LookupMap<TokenId, Vec<TokenId>>,
+    owner_earnings: LookupMap<AccountId, NearToken>,
+    leases: LookupSet<String>,
+    by_fingerprint: LookupMap<String, Vec<TokenId>>,
+    next_id: u64,
     mpc_contract: AccountId,
 }
 
@@ -253,6 +273,26 @@ impl Contract {
             by_fingerprint: LookupMap::new(StorageKey::ByFingerprint),
             next_id: 1,
             mpc_contract: mpc_contract.unwrap_or_else(|| DEFAULT_MPC_CONTRACT.parse().unwrap()),
+            sealed: LookupMap::new(StorageKey::Sealed),
+        }
+    }
+
+    /// Migra el estado de la v2 agregando los proyectos sellados. Lo llama el propio contrato al actualizarse.
+    #[private]
+    #[init(ignore_state)]
+    pub fn migrate() -> Self {
+        let old: ContractV2 = env::state_read().unwrap_or_else(|| env::panic_str("No v2 state to migrate"));
+        Self {
+            tokens: old.tokens,
+            metadata: old.metadata,
+            beats: old.beats,
+            remixes: old.remixes,
+            owner_earnings: old.owner_earnings,
+            leases: old.leases,
+            by_fingerprint: old.by_fingerprint,
+            next_id: old.next_id,
+            mpc_contract: old.mpc_contract,
+            sealed: LookupMap::new(StorageKey::Sealed),
         }
     }
 
@@ -333,6 +373,18 @@ impl Contract {
             Gas::from_tgas(0),
             GasWeight(1),
         )
+    }
+
+    /// Sella el proyecto: guarda el CID del proyecto cifrado a nombre de la cuenta propia del beat
+    /// (solo el dueño del NFT puede abrirlo) y cierra los remixes, que necesitan el proyecto abierto.
+    /// Se puede llamar una sola vez por beat.
+    pub fn set_sealed_project(&mut self, token_id: TokenId, cid: String) {
+        self.assert_owner(&token_id);
+        validate_text(&cid, 1, MAX_CID, "The sealed project CID");
+        require!(!self.sealed.contains_key(&token_id), "The project is already sealed");
+        self.beat_mut(&token_id).remix_allowed = false;
+        log_event("seal", &format!(r#"{{"token_id":"{}","cid":"{}"}}"#, token_id, cid));
+        self.sealed.insert(token_id, cid);
     }
 
     /// Ruta de derivación de la cuenta propia del beat (para calcular su dirección con el contrato MPC).
@@ -441,6 +493,10 @@ impl Contract {
     /// El dueño decide el precio de remix y si se permite remezclar.
     pub fn set_license(&mut self, token_id: TokenId, remix_price: NearToken, remix_allowed: bool) {
         self.assert_owner(&token_id);
+        require!(
+            !(remix_allowed && self.sealed.contains_key(&token_id)),
+            "This beat's project is sealed: remixes need the open project"
+        );
         let beat = self.beat_mut(&token_id);
         beat.remix_price = remix_price;
         beat.remix_allowed = remix_allowed;
@@ -752,6 +808,7 @@ impl Contract {
             exclusive_sold: b.exclusive_sold,
             musecure_fingerprint: b.musecure_fingerprint.clone(),
             art: b.art.clone(),
+            sealed_cid: self.sealed.get(token_id).cloned(),
             level: dynamic::level(&self.stats(token_id)),
             badges: dynamic::badges(&self.stats(token_id)).into_iter().map(String::from).collect(),
         })

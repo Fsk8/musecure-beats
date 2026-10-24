@@ -630,3 +630,64 @@ fn dump_sample_cover() {
         std::fs::write(path, dynamic::svg("Noche en Cochabamba", "7", Some(art), &s)).unwrap();
     }
 }
+
+// ---------- proyecto sellado
+
+#[test]
+fn owner_seals_project_and_remixes_close() {
+    let mut c = with_original(zero());
+    set_caller("favio.testnet", zero());
+    c.set_sealed_project("1".into(), "bafysealed".into());
+    let v = c.get_beat("1".into()).unwrap();
+    assert_eq!(v.sealed_cid.as_deref(), Some("bafysealed"));
+    assert!(!v.remix_allowed);
+}
+
+#[test]
+#[should_panic(expected = "Only the NFT owner")]
+fn only_owner_seals() {
+    let mut c = with_original(zero());
+    set_caller("ingrid.testnet", zero());
+    c.set_sealed_project("1".into(), "bafysealed".into());
+}
+
+#[test]
+#[should_panic(expected = "already sealed")]
+fn seal_only_once() {
+    let mut c = with_original(zero());
+    set_caller("favio.testnet", zero());
+    c.set_sealed_project("1".into(), "bafysealed".into());
+    c.set_sealed_project("1".into(), "bafyother".into());
+}
+
+#[test]
+#[should_panic(expected = "project is sealed")]
+fn sealed_beat_cannot_reopen_remixes() {
+    let mut c = with_original(zero());
+    set_caller("favio.testnet", zero());
+    c.set_sealed_project("1".into(), "bafysealed".into());
+    c.set_license("1".into(), zero(), true);
+}
+
+#[test]
+fn migrate_from_v2_keeps_beats() {
+    let mut c = with_original(zero());
+    // Simula el estado de la v2 escribiendo la estructura vieja y migrando.
+    let mut v2 = ContractV2 {
+        tokens: std::mem::replace(&mut c.tokens, NonFungibleToken::new(StorageKey::NonFungibleToken, acc("x.testnet"), Some(StorageKey::TokenMetadata), Some(StorageKey::Enumeration), Some(StorageKey::Approval))),
+        metadata: LazyOption::new(StorageKey::Metadata, None),
+        beats: std::mem::replace(&mut c.beats, LookupMap::new(StorageKey::Beats)),
+        remixes: LookupMap::new(StorageKey::Remixes),
+        owner_earnings: LookupMap::new(StorageKey::OwnerEarnings),
+        leases: LookupSet::new(StorageKey::Leases),
+        by_fingerprint: LookupMap::new(StorageKey::ByFingerprint),
+        next_id: c.next_id,
+        mpc_contract: acc(DEFAULT_MPC_CONTRACT),
+    };
+    v2.beats.flush(); // las colecciones de near_sdk::store guardan en caché hasta que se vacían
+    near_sdk::env::state_write(&v2);
+    set_caller("beats.testnet", zero());
+    let migrated = Contract::migrate();
+    assert_eq!(migrated.get_beat("1".into()).unwrap().title, "Original");
+    assert!(migrated.get_beat("1".into()).unwrap().sealed_cid.is_none());
+}

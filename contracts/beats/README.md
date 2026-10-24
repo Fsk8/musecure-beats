@@ -121,3 +121,11 @@ Si algún comando pide datos de forma interactiva, responde según lo que pregun
   de esa dirección pasa al nuevo dueño** sin puentes. `beat_account_path(token_id)` devuelve la ruta.
 
 El estado cambió (`art` en cada beat, `mpc_contract` en el contrato): la v2 se despliega en una cuenta nueva.
+
+## v3: sealed projects
+
+- `set_sealed_project(token_id, cid)` (owner only, once): stores the CID of the project encrypted with Lighthouse **to the NFT's own
+  EVM address**, and closes remixes (they need the open project). `BeatView.sealed_cid` exposes it.
+- Lighthouse releases the key only to a signature from that address, and only the current NFT owner can obtain one
+  (`sign_for_beat`). Selling the NFT moves access to the buyer.
+- Upgrade from v2 keeps every beat: deploy with `with-init-call migrate json-args '{}'`.
