@@ -5,6 +5,7 @@ import { getBeats, hasLease, yoctoToNear } from '../near/contract';
 import { CONTRACT_ID, explorerAccountUrl, explorerNftUrl, explorerTokenUrl, explorerTxUrl, shortAccount } from '../near/config';
 import { fetchIpfs, ipfsUrl } from '../near/ipfs';
 import { nearToYocto, payContract, sha256Hex } from '../near/register';
+import { MONAD_EXPLORER, anchorInMusecure, musecureStatus } from '../near/musecure';
 
 const pct = (bps) => `${(bps / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })} %`;
 
@@ -138,6 +139,64 @@ function LeaseBox({ beat: b, onChanged }) {
     <div className="lease-box">
       {action}
       {txHash && <a className="hint" href={explorerTxUrl(txHash)} target="_blank" rel="noreferrer">Ver transacción</a>}
+      {error && <span className="hint warn-text">{error}</span>}
+    </div>
+  );
+}
+
+/**
+ * Registrar el beat en MuSecure (Monad) con Chain Signatures: la cuenta NEAR del autor firma,
+ * a través de la red MPC de NEAR, una transacción en Monad desde su dirección EVM derivada.
+ */
+function AnchorBox({ beat: b }) {
+  const { status, account, accountId, getAccessToken, refresh } = useNear();
+  const [registered, setRegistered] = useState(null);
+  const [step, setStep] = useState('');
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!b.musecure_fingerprint) return;
+    let alive = true;
+    musecureStatus(b.musecure_fingerprint).then((r) => alive && setRegistered(r.registered)).catch(() => alive && setRegistered(null));
+    return () => { alive = false; };
+  }, [b.musecure_fingerprint]);
+
+  if (!b.musecure_fingerprint) return <p className="hint">Este beat no tiene huella MuSecure: no se puede registrar en MuSecure.</p>;
+  const mine = accountId && accountId === b.creator;
+
+  async function anchor() {
+    setError('');
+    setResult(null);
+    try {
+      const r = await anchorInMusecure({ account, accountId, beat: b, contractId: CONTRACT_ID, getAccessToken, onStep: setStep });
+      setResult(r);
+      setRegistered(true);
+      refresh();
+    } catch (e) {
+      if (e.alreadyRegistered) setRegistered(true);
+      setError(e?.message || String(e));
+    } finally {
+      setStep('');
+    }
+  }
+
+  return (
+    <div className="lease-box">
+      {registered === true && <span className="ok-text">✓ Registrado en MuSecure (Monad)</span>}
+      {registered === false && !mine && <span className="hint">Aún no está registrado en MuSecure.</span>}
+      {registered === false && mine && status === 'active' && (
+        <button onClick={anchor} disabled={Boolean(step)} title="Firma con tu cuenta NEAR, vía Chain Signatures, el registro en MuSecure (Monad)">
+          {step || 'Registrar en MuSecure (Monad) con Chain Signatures'}
+        </button>
+      )}
+      {result && (
+        <span className="hint">
+          <a href={`${MONAD_EXPLORER}/tx/${result.hash}`} target="_blank" rel="noreferrer">Transacción en Monad</a>
+          {result.nearTx && <> · <a href={explorerTxUrl(result.nearTx)} target="_blank" rel="noreferrer">Firma en NEAR</a></>}
+          {' · '}desde <a href={`${MONAD_EXPLORER}/address/${result.evmAddress}`} target="_blank" rel="noreferrer">tu dirección EVM derivada</a>
+        </span>
+      )}
       {error && <span className="hint warn-text">{error}</span>}
     </div>
   );
@@ -289,6 +348,8 @@ function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged }) {
             {b.license_uri && <a href={b.license_uri.replace(/^ipfs:\/\//, ipfsUrl(''))} target="_blank" rel="noreferrer">Licencia</a>}
           </div>
           <VerifyAudio beat={b} />
+          <span className="label">MuSecure (Monad)</span>
+          <AnchorBox beat={b} />
         </div>
       )}
     </li>

@@ -35,6 +35,20 @@ Estado actual: prototipo de sonido, sin blockchain todavía. El beat se guarda e
 
 Sin App ID la app funciona igual, pero en solo lectura: se puede crear música y ver los beats registrados, sin iniciar sesión.
 
+## Registro en MuSecure (Monad) con Chain Signatures
+
+Cada beat registrado en NEAR se puede certificar también en MuSecure (Monad), sin wallets nuevas:
+
+1. En la galería, abre **Detalles** de un beat tuyo y presiona **Registrar en MuSecure (Monad) con Chain Signatures**.
+2. La app sube la metadata en el formato de MuSecure (`src/near/musecure.js`) y el servidor (`api/musecure-prepare.js`):
+   comprueba que la cuenta NEAR y el beat son tuyos, calcula tu dirección EVM derivada (contrato MPC `v1.signer-prod.testnet`,
+   ruta `musecure`), pide gas de testnet a la tesorería de MuSecure y la firma del score, y arma la transacción `registerWork`.
+3. Tu cuenta NEAR firma una sola transacción al contrato MPC; la red MPC de NEAR devuelve la firma ECDSA de la transacción de Monad.
+4. `api/musecure-broadcast.js` verifica que la firma corresponde a tu dirección derivada y la envía a Monad.
+
+El beat aparece en el Explorer de MuSecure con el atributo "Origen: MuSecure Beats (NEAR)". Se registra con score 0 y la
+metadata aclara que no pasó por el análisis de catálogo de MuSecure.
+
 ## Código reutilizado de MuSecure
 
 `src/fingerprint/` es un port del worker de huella acústica de [MuSecure](https://github.com/Fsk8/MuSecure-Core-Functions) (`src/workers/audioFingerprint.worker.ts`), proyecto previo del mismo equipo. El algoritmo no cambia y se usan las mismas versiones de FFmpeg, para que el mismo audio produzca la misma huella en ambas apps. Está aislado como módulo para convertirlo más adelante en un paquete compartido del ecosistema (`@musecure/fingerprint`).
@@ -54,7 +68,8 @@ src/
 api/upload.js         función de Vercel: sube a IPFS con Lighthouse (la clave queda en el servidor)
 api/activate.js       función de Vercel: activa cuentas nuevas de Privy con NEAR de patrocinio
 api/resolve-collaborators.js  función de Vercel: email del colaborador → su cuenta NEAR de Privy
-api/_lib/             código compartido de las funciones (verificación de sesión de Privy)
+api/_lib/             código compartido: verificación de sesión de Privy y puente a MuSecure (Chain Signatures)
+api/musecure-*.js     funciones de Vercel para registrar beats en MuSecure (Monad)
 contracts/beats/      contrato de NEAR en Rust (NFT NEP-171, créditos, remix, regalías)
 ```
 
