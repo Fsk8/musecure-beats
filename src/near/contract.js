@@ -2,6 +2,16 @@
 import { CONTRACT_ID } from './config';
 
 export const getBeats = (provider, limit = 12) => provider.callFunction(CONTRACT_ID, 'get_beats', { limit });
+
+/** Todos los beats del contrato, de 50 en 50 (del más nuevo al más antiguo). */
+export async function getAllBeats(provider) {
+  const all = [];
+  for (let from = 0; ; from += 50) {
+    const page = await provider.callFunction(CONTRACT_ID, 'get_beats', { from_index: from, limit: 50 });
+    all.push(...page);
+    if (page.length < 50) return all;
+  }
+}
 export const hasLease = (provider, tokenId, accountId) =>
   provider.callFunction(CONTRACT_ID, 'has_lease', { token_id: tokenId, account_id: accountId });
 export const getOwnerEarnings = (provider, accountId) =>

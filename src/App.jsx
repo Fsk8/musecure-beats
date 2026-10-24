@@ -18,6 +18,7 @@ import { SavePanel } from './components/SavePanel';
 import { AccountBar } from './components/AccountBar';
 import { Gallery } from './components/Gallery';
 import { Drawer } from './components/Drawer';
+import { Earnings } from './components/Earnings';
 import { RegisterPanel } from './components/RegisterPanel';
 
 export default function App() {
@@ -41,7 +42,7 @@ export default function App() {
   const toggleDrawer = (id) => setDrawer((d) => (d === id ? null : id));
   // Botones como "Registrar beat" piden abrir un panel con este evento.
   useEffect(() => {
-    const onOpen = (e) => { if (['save', 'register', 'gallery'].includes(e.detail)) setDrawer(e.detail); };
+    const onOpen = (e) => { if (['save', 'register', 'gallery', 'earnings'].includes(e.detail)) setDrawer(e.detail); };
     window.addEventListener('msb:open-panel', onOpen);
     return () => window.removeEventListener('msb:open-panel', onOpen);
   }, []);
@@ -253,7 +254,7 @@ export default function App() {
 
   const subtitle = `${KITS[S.kit].name} · ${ROOTS[S.root][1]} ${SCALES[S.scale][0].toLowerCase()} · ${S.len} pasos`;
 
-  const drawerTitles = { save: 'Guardar y exportar', register: 'Registrar en NEAR', gallery: 'Beats en NEAR' };
+  const drawerTitles = { save: 'Guardar y exportar', register: 'Registrar en NEAR', gallery: 'Beats en NEAR', earnings: 'Mis ganancias' };
 
   return (
     <>
@@ -280,6 +281,7 @@ export default function App() {
           Registrar en NEAR{S.remixOf ? ` · remix de #${S.remixOf.token_id}` : ''}
         </button>
         <button aria-pressed={drawer === 'gallery'} onClick={() => toggleDrawer('gallery')}>Galería</button>
+        <button aria-pressed={drawer === 'earnings'} onClick={() => toggleDrawer('earnings')}>Mis ganancias</button>
       </nav>
 
       <Transport
@@ -347,6 +349,9 @@ export default function App() {
       </div>
       <div hidden={drawer !== 'register'}>
       <RegisterPanel title={S.title} buildFiles={buildRegisterFiles} remixOf={S.remixOf} beat={S} onRegistered={clearRemix} />
+      </div>
+      <div hidden={drawer !== 'earnings'}>
+        {drawer === 'earnings' && <Earnings />}
       </div>
       <div hidden={drawer !== 'gallery'}>
       <Gallery onOpenProject={openFromGallery} />
