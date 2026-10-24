@@ -8,6 +8,7 @@ import { REMIX_MIN_SIMILARITY, parseProjectFile, remixSimilarity } from '../musi
 import { fetchIpfs } from '../near/ipfs';
 import { collectEmails, nearToYocto, registerBeat, resolveEmails, sha256Hex, toCredits, uploadToIpfs } from '../near/register';
 import { generateFingerprint } from '../fingerprint';
+import { SEALED_PLACEHOLDER, sealProject } from '../near/seal';
 
 const emptyRow = () => ({ account: '', pct: '' });
 
@@ -65,6 +66,10 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
   const [remixPrice, setRemixPrice] = useState('0');
   const [leasePrice, setLeasePrice] = useState('0');
   const [licenseUri, setLicenseUri] = useState('');
+  // 'open': proyecto público (remixable) · 'sealed': cifrado a nombre de la cuenta del NFT.
+  const [privacy, setPrivacy] = useState('open');
+  const [pendingSeal, setPendingSeal] = useState(null);
+  const [sealStep, setSealStep] = useState('');
   const [step, setStep] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
@@ -87,6 +92,20 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
     };
   }
 
+  /** Cifra el proyecto a nombre del NFT recién creado. Si falla, se puede reintentar sin volver a registrar. */
+  async function runSeal(tokenId, projectText) {
+    setPendingSeal({ tokenId, projectText });
+    try {
+      await sealProject({ account, accountId, tokenId, projectText, getAccessToken, onStep: setSealStep });
+      setPendingSeal(null);
+      window.dispatchEvent(new Event('msb:beats-changed'));
+    } catch (e) {
+      setError(`The beat was registered, but sealing failed: ${e?.message || e}. Retry below.`);
+    } finally {
+      setSealStep('');
+    }
+  }
+
   async function submit() {
     setError('');
     setWarning('');
@@ -104,7 +123,8 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
       if (remixOf && balance !== null && Number(yoctoToNear(remixOf.remix_price, 6)) + 0.01 > balance) {
         throw new Error(`Not enough balance: the remix license costs ${yoctoToNear(remixOf.remix_price)} Ⓝ and you have ${balance.toFixed(3)} Ⓝ`);
       }
-      const remix_price = nearToYocto(remixPrice);
+      const sealed = privacy === 'sealed';
+      const remix_price = sealed ? '0' : nearToYocto(remixPrice);
       const lease_price = nearToYocto(leasePrice);
       const license_uri = licenseUri.trim() || null;
       if (license_uri && /["\\]/.test(license_uri)) throw new Error('The license link cannot contain quotes');
@@ -127,9 +147,10 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
       }
 
       setStep('Uploading to IPFS…');
+      // Sellado: el proyecto no se publica; después del registro se cifra a nombre del NFT.
       const [audio_cid, project_cid] = await Promise.all([
         uploadToIpfs(wav, `${baseName}.wav`),
-        uploadToIpfs(project, `${baseName}.musecure.json`),
+        sealed ? Promise.resolve(SEALED_PLACEHOLDER) : uploadToIpfs(project, `${baseName}.musecure.json`),
       ]);
 
       setStep('Signing on NEAR…');
@@ -148,6 +169,7 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
       }, remixOf);
       setResult(beat);
       onRegistered?.(beat);
+      if (sealed) await runSeal(beat.token_id, await project.text());
       refresh();
       window.dispatchEvent(new Event('msb:beats-changed'));
     } catch (e) {
@@ -259,10 +281,25 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
           )}
 
           <div className="bar">
+            <span className="label">Project</span>
+            <div className="seg" role="radiogroup" aria-label="Project privacy">
+              <button role="radio" aria-checked={privacy === 'open'} onClick={() => setPrivacy('open')}>Open (remixable)</button>
+              <button role="radio" aria-checked={privacy === 'sealed'} onClick={() => setPrivacy('sealed')}>Sealed</button>
+            </div>
+          </div>
+          <p className="hint">
+            {privacy === 'open'
+              ? 'The project (notes, kit, mix) is public on IPFS: anyone can remix it, and licensees can download the stems.'
+              : 'The project is encrypted to the NFT\'s own account: only the current NFT owner can open it (if the NFT is sold, access moves to the buyer). Remixes and stems for licensees are off; the mix WAV stays public for listening.'}
+          </p>
+
+          <div className="bar">
+            {privacy === 'open' && (
             <label htmlFor="remixPrice">Remix license
               <input id="remixPrice" className="text pct" type="number" min="0" step="0.01" value={remixPrice}
                 onChange={(e) => setRemixPrice(e.target.value)} /> Ⓝ
             </label>
+            )}
             <label htmlFor="leasePrice">Non-exclusive license
               <input id="leasePrice" className="text pct" type="number" min="0" step="0.01" value={leasePrice}
                 onChange={(e) => setLeasePrice(e.target.value)} /> Ⓝ
@@ -284,6 +321,14 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
 
       {error && <p className="hint warn-text" role="alert">{error}</p>}
       {warning && <p className="hint">{warning}</p>}
+      {sealStep && <p className="hint">{sealStep}</p>}
+      {pendingSeal && !sealStep && (
+        <div className="bar">
+          <button className="primary" onClick={() => { setError(''); runSeal(pendingSeal.tokenId, pendingSeal.projectText); }}>
+            Retry sealing beat #{pendingSeal.tokenId}
+          </button>
+        </div>
+      )}
       {result && (
         <div className="success" role="status">
           <strong>Registered! Beat #{result.token_id}: {result.title}</strong>

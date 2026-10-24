@@ -100,6 +100,33 @@ export default function App() {
     return () => window.removeEventListener('msb:stop-sequencer', stop);
   }, [engine]);
 
+  /**
+   * Stems para quien tiene licencia: cada pista por separado en WAV, renderizadas del proyecto en IPFS.
+   * No toca el beat abierto. `onProgress(texto)` informa el avance.
+   */
+  async function renderStems(projectText, beat, onProgress) {
+    const project = parseProjectFile(projectText);
+    for (let t = 0; t < TRACKS.length; t++) {
+      onProgress(`Rendering ${TRACKS[t].name} (${t + 1}/${TRACKS.length})…`);
+      const solo = { ...project, mix: project.mix.map((m, i) => ({ ...m, mute: false, solo: i === t })) };
+      // eslint-disable-next-line no-await-in-loop
+      const buffer = await engine.renderOffline(1, () => {}, solo);
+      downloadBlob(audioBufferToWav(buffer), `${fileSafeName(beat.title)}-${beat.token_id}-${TRACKS[t].id}.wav`);
+    }
+  }
+
+  /** El dueño abre su proyecto sellado (ya descifrado) para seguir trabajándolo. No es un remix: es suyo. */
+  function openSealedFromGallery(text, beat) {
+    const loaded = parseProjectFile(text);
+    if (!window.confirm(`This replaces your open beat with your sealed project "${beat.title}". Continue?`)) return;
+    if (engine.playing) { engine.stop(); setPlaying(false); }
+    setUndoBuf(null);
+    replaceState({ ...loaded, remixOf: null, tab: S.tab, page: 0, emode: S.emode });
+    setSaveMessage(`Opened your sealed project #${beat.token_id} "${beat.title}".`);
+    setDrawer(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   /** Abre en el secuenciador el proyecto de un beat registrado (descargado de IPFS) para remixarlo. */
   function openFromGallery(text, beat) {
     const loaded = parseProjectFile(text);
@@ -355,7 +382,7 @@ export default function App() {
         {drawer === 'earnings' && <Earnings />}
       </div>
       <div hidden={drawer !== 'gallery'}>
-      <Gallery onOpenProject={openFromGallery} />
+      <Gallery onOpenProject={openFromGallery} onRenderStems={renderStems} onOpenSealed={openSealedFromGallery} />
       </div>
     </Drawer>
     </>

@@ -49,6 +49,14 @@ Cada beat registrado en NEAR se puede certificar también en MuSecure (Monad), s
 El beat aparece en el Explorer de MuSecure con el atributo "Origen: MuSecure Beats (NEAR)". Se registra con score 0 y la
 metadata aclara que no pasó por el análisis de catálogo de MuSecure.
 
+## Proyectos sellados (cifrados a nombre del NFT)
+
+Al registrar, el artista elige **Open** (proyecto público, remixable) o **Sealed**. Sellado: el proyecto se cifra con Lighthouse
+a nombre de la **dirección EVM propia del NFT** (Chain Signatures). Lighthouse solo entrega la llave con una firma de esa
+dirección, que solo puede pedir el dueño actual del NFT (`sign_for_beat`). Si el NFT se vende, el acceso pasa al comprador.
+El servidor (`api/seal-*.js`) verifica la sesión y la firma, pero no guarda llaves: sin una firma nueva del dueño no puede descifrar.
+Los remixes y los stems para licenciatarios se desactivan en beats sellados; el WAV de la mezcla sigue público para escuchar.
+
 ## Código reutilizado de MuSecure
 
 `src/fingerprint/` es un port del worker de huella acústica de [MuSecure](https://github.com/Fsk8/MuSecure-Core-Functions) (`src/workers/audioFingerprint.worker.ts`), proyecto previo del mismo equipo. El algoritmo no cambia y se usan las mismas versiones de FFmpeg, para que el mismo audio produzca la misma huella en ambas apps. Está aislado como módulo para convertirlo más adelante en un paquete compartido del ecosistema (`@musecure/fingerprint`).

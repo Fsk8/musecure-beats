@@ -5,6 +5,9 @@ import { getBeatMedia, getBeats, hasLease, yoctoToNear } from '../near/contract'
 import { CONTRACT_ID, explorerAccountUrl, explorerNftUrl, explorerTokenUrl, explorerTxUrl, shortAccount } from '../near/config';
 import { fetchIpfs, ipfsUrl } from '../near/ipfs';
 import { nearToYocto, payContract, sha256Hex } from '../near/register';
+import { licenseCertificateSvg } from '../near/certificate';
+import { isSealed, openSealedProject } from '../near/seal';
+import { downloadBlob } from '../io/files';
 import { MONAD_EXPLORER, anchorInMusecure, beatAccountStatus } from '../near/musecure';
 
 const pct = (bps) => `${(bps / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })} %`;
@@ -91,7 +94,79 @@ function VerifyAudio({ beat }) {
  * Licencia no exclusiva: permite usar el beat (por ejemplo, para grabar encima) sin ser dueño del NFT.
  * Una por cuenta; el pago se reparte mitad para el dueño y mitad para los autores.
  */
-function LeaseBox({ beat: b, onChanged }) {
+/**
+ * What a license unlocks: the stems (each track as its own WAV, rendered from the project on IPFS) and a
+ * license certificate. The license itself is a credential on chain: anyone can check it with has_lease.
+ */
+function LicenseTools({ beat: b, holder, onRenderStems }) {
+  const { account, accountId, getAccessToken } = useNear();
+  const [step, setStep] = useState('');
+  const [error, setError] = useState('');
+  const sealed = isSealed(b);
+  const isOwner = accountId && accountId === b.owner_id;
+
+  async function stems() {
+    setError('');
+    try {
+      setStep('Downloading project…');
+      const text = sealed
+        ? await openSealedProject({ account, accountId, beat: b, getAccessToken, onStep: setStep })
+        : await (await fetchIpfs(b.project_cid)).text();
+      await onRenderStems(text, b, setStep);
+    } catch (e) {
+      setError(e?.message || String(e));
+    } finally {
+      setStep('');
+    }
+  }
+
+  function certificate() {
+    const svg = licenseCertificateSvg({ beat: b, licensee: holder });
+    downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), `license-beat-${b.token_id}.svg`);
+  }
+
+  return (
+    <div className="lease-box">
+      {(!sealed || isOwner) && (
+        <button onClick={stems} disabled={Boolean(step)} title={sealed ? 'Opens the sealed project with the NFT account and renders each track' : 'Each track as a separate WAV, rendered from the project on IPFS'}>
+          {step || (sealed ? 'Download stems (sealed · owner only)' : 'Download stems (4 WAV)')}
+        </button>
+      )}
+      {sealed && !isOwner && <span className="hint">🔒 Stems are sealed in the NFT: only its owner can open them. Your license covers the mix.</span>}
+      <button onClick={certificate}>License certificate</button>
+      {error && <span className="hint warn-text">{error}</span>}
+    </div>
+  );
+}
+
+/** Anyone can check on chain whether an account holds a non-exclusive license for this beat. */
+function VerifyLicense({ beat: b }) {
+  const { provider } = useNear();
+  const [who, setWho] = useState('');
+  const [result, setResult] = useState(null);
+  async function check() {
+    const account = who.trim().toLowerCase();
+    if (!account) return;
+    setResult('checking');
+    try {
+      setResult((await hasLease(provider, b.token_id, account)) ? 'yes' : 'no');
+    } catch (e) {
+      setResult(`error:${e?.message || e}`);
+    }
+  }
+  return (
+    <div className="lease-box">
+      <input className="text" aria-label="NEAR account to verify" placeholder="account to verify" value={who}
+        onChange={(e) => { setWho(e.target.value); setResult(null); }} />
+      <button onClick={check} disabled={result === 'checking'}>{result === 'checking' ? 'Checking…' : 'Verify license'}</button>
+      {result === 'yes' && <span className="ok-text">✓ Holds a non-exclusive license (on chain)</span>}
+      {result === 'no' && <span className="hint">No license for this beat.</span>}
+      {result?.startsWith?.('error:') && <span className="hint warn-text">{result.slice(6)}</span>}
+    </div>
+  );
+}
+
+function LeaseBox({ beat: b, onChanged, onRenderStems }) {
   const { status, account, accountId, balance, provider, login, refresh } = useNear();
   const [owned, setOwned] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -105,7 +180,10 @@ function LeaseBox({ beat: b, onChanged }) {
     return () => { alive = false; };
   }, [provider, b.token_id, accountId, b.lease_count]);
 
-  if (b.exclusive_sold || b.lease_price === '0') return null;
+  const isOwner = accountId && accountId === b.owner_id;
+  // Licensees (and the owner, who holds the exclusive) get the stems and a certificate, even after the exclusive is sold.
+  const tools = (owned || isOwner) && <LicenseTools beat={b} holder={accountId} onRenderStems={onRenderStems} />;
+  if (b.exclusive_sold || b.lease_price === '0') return tools || null;
   const price = yoctoToNear(b.lease_price);
 
   async function buy() {
@@ -130,17 +208,20 @@ function LeaseBox({ beat: b, onChanged }) {
 
   let action;
   if (owned) action = <span className="ok-text">✓ You hold a non-exclusive license for this beat</span>;
-  else if (accountId && accountId === b.owner_id) action = <span className="hint">You are the owner: no license needed.</span>;
+  else if (isOwner) action = null;
   else if (status === 'signed-out') action = <button onClick={login}>Sign in to buy the license ({price} Ⓝ)</button>;
   else if (status !== 'active') action = <span className="hint">Activate your account to buy the license.</span>;
   else action = <button className="primary" onClick={buy} disabled={busy}>{busy ? 'Buying…' : `Buy non-exclusive license · ${price} Ⓝ`}</button>;
 
   return (
+    <>
     <div className="lease-box">
       {action}
       {txHash && <a className="hint" href={explorerTxUrl(txHash)} target="_blank" rel="noreferrer">View transaction</a>}
       {error && <span className="hint warn-text">{error}</span>}
     </div>
+    {tools}
+    </>
   );
 }
 
@@ -366,8 +447,9 @@ function BuyBox({ beat: b, onChanged }) {
 }
 
 /** Owner controls: sell the NFT, and set remix and non-exclusive license prices. */
-function OwnerBox({ beat: b, onChanged }) {
-  const { account, accountId } = useNear();
+function OwnerBox({ beat: b, onChanged, onOpenSealed }) {
+  const { account, accountId, getAccessToken } = useNear();
+  const [openStep, setOpenStep] = useState('');
   const [salePrice, setSalePrice] = useState(b.sale_price ? yoctoToNear(b.sale_price, 6) : '1');
   const [remixPrice, setRemixPrice] = useState(yoctoToNear(b.remix_price, 6));
   const [remixAllowed, setRemixAllowed] = useState(b.remix_allowed);
@@ -390,9 +472,30 @@ function OwnerBox({ beat: b, onChanged }) {
     }
   }
 
+  async function openSealed() {
+    setMsg(null);
+    try {
+      const text = await openSealedProject({ account, accountId, beat: b, getAccessToken, onStep: setOpenStep });
+      onOpenSealed(text, b);
+    } catch (e) {
+      setMsg({ ok: false, text: e?.message || String(e) });
+    } finally {
+      setOpenStep('');
+    }
+  }
+
   return (
     <div className="owner-box">
       <span className="label">Owner controls</span>
+      {b.sealed_cid && (
+        <div className="lease-box">
+          <span>🔒 Sealed project (encrypted to the NFT account)</span>
+          <button onClick={openSealed} disabled={Boolean(openStep)}>{openStep || 'Open in the sequencer'}</button>
+        </div>
+      )}
+      {!b.sealed_cid && b.project_cid === 'sealed' && (
+        <span className="hint warn-text">Sealing was not completed for this beat. Retry it from "Register on NEAR" right after registering.</span>
+      )}
       <div className="lease-box">
         {b.sale_price ? (
           <>
@@ -446,7 +549,7 @@ function OwnerBox({ beat: b, onChanged }) {
   );
 }
 
-function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged }) {
+function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged, onRenderStems, onOpenSealed }) {
   const [open, setOpen] = useState(false);
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState('');
@@ -480,9 +583,9 @@ function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged }) {
       </div>
       <div className="bar">
         <button className={playing ? 'primary' : ''} onClick={() => onPlay(b)}>{playing ? '■ Stop' : '▶ Listen'}</button>
-        <button onClick={openProject} disabled={opening || !b.remix_allowed}
-          title={b.remix_allowed ? 'Opens the project in the sequencer; when registered it becomes a remix of this beat' : 'The owner does not allow remixes'}>
-          {opening ? 'Opening…' : !b.remix_allowed ? 'Remix not allowed'
+        <button onClick={openProject} disabled={opening || !b.remix_allowed || isSealed(b)}
+          title={isSealed(b) ? 'The project is sealed in the NFT' : b.remix_allowed ? 'Opens the project in the sequencer; when registered it becomes a remix of this beat' : 'The owner does not allow remixes'}>
+          {opening ? 'Opening…' : isSealed(b) ? '🔒 Sealed project' : !b.remix_allowed ? 'Remix not allowed'
             : `Remix${b.remix_price === '0' ? ' (free)' : ` (${yoctoToNear(b.remix_price)} Ⓝ)`}`}
         </button>
         <button aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide details' : 'Details'}</button>
@@ -490,7 +593,7 @@ function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged }) {
       {openError && <p className="hint warn-text">{openError}</p>}
       {b.sale_price && <span className="badge ok">For sale · {yoctoToNear(b.sale_price)} Ⓝ</span>}
       <BuyBox beat={b} onChanged={onChanged} />
-      <LeaseBox beat={b} onChanged={onChanged} />
+      <LeaseBox beat={b} onChanged={onChanged} onRenderStems={onRenderStems} />
       {open && (
         <div className="beat-details">
           <div className="beat-meta">
@@ -500,7 +603,9 @@ function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged }) {
             {b.sale_price && <span>For sale (exclusive): {yoctoToNear(b.sale_price)} Ⓝ</span>}
             {b.total_earned !== '0' && <span>Earned: {yoctoToNear(b.total_earned)} Ⓝ</span>}
           </div>
-          <OwnerBox beat={b} onChanged={onChanged} />
+          <OwnerBox beat={b} onChanged={onChanged} onOpenSealed={onOpenSealed} />
+          <span className="label">Verify a license</span>
+          <VerifyLicense beat={b} />
           <span className="label">Credits</span>
           <CreditsView credits={b.credits} />
           <ClaimBox beat={b} onChanged={onChanged} />
@@ -515,7 +620,7 @@ function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged }) {
             <a href={explorerTokenUrl(CONTRACT_ID, b.token_id)} target="_blank" rel="noreferrer">NFT on NearBlocks</a>
             <a href={explorerAccountUrl(b.creator)} target="_blank" rel="noreferrer">Creator transactions</a>
             <a href={ipfsUrl(b.audio_cid)} target="_blank" rel="noreferrer">Audio on IPFS</a>
-            <a href={ipfsUrl(b.project_cid)} target="_blank" rel="noreferrer">Project on IPFS</a>
+            {!isSealed(b) && <a href={ipfsUrl(b.project_cid)} target="_blank" rel="noreferrer">Project on IPFS</a>}
             {b.license_uri && <a href={b.license_uri.replace(/^ipfs:\/\//, ipfsUrl(''))} target="_blank" rel="noreferrer">License</a>}
           </div>
           <VerifyAudio beat={b} />
@@ -528,7 +633,7 @@ function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged }) {
 }
 
 /** Beats registrados en el contrato, del más nuevo al más antiguo. Lectura gratis, sin sesión. */
-export function Gallery({ onOpenProject }) {
+export function Gallery({ onOpenProject, onRenderStems, onOpenSealed }) {
   const { provider } = useNear();
   const [beats, setBeats] = useState(null);
   const [error, setError] = useState('');
@@ -601,7 +706,7 @@ export function Gallery({ onOpenProject }) {
       {beats && beats.length > 0 && (
         <ul className="beat-list">
           {beats.map((b) => (
-            <BeatCard key={b.token_id} beat={b} playing={playingId === b.token_id} onPlay={play} onOpen={open} onChanged={() => window.dispatchEvent(new Event('msb:beats-changed'))} />
+            <BeatCard key={b.token_id} beat={b} playing={playingId === b.token_id} onPlay={play} onOpen={open} onRenderStems={onRenderStems} onOpenSealed={onOpenSealed} onChanged={() => window.dispatchEvent(new Event('msb:beats-changed'))} />
           ))}
         </ul>
       )}

@@ -8,8 +8,8 @@
 import { CONTRACT_ID } from './config';
 import { uploadToIpfs } from './register';
 export const MONAD_EXPLORER = 'https://testnet.monadscan.com';
-const SIGN_GAS = 300000000000000n; // 300 Tgas: lo que usa la librería oficial (chainsig.js)
-const SIGN_DEPOSIT = 1n; // 1 yoctoNEAR
+export const SIGN_GAS = 300000000000000n; // 300 Tgas: lo que usa la librería oficial (chainsig.js)
+export const SIGN_DEPOSIT = 1n; // 1 yoctoNEAR
 
 /** Misma imagen por defecto que usa MuSecure para sus certificados. */
 const DEFAULT_IMAGE = 'ipfs://bafybeibvbfxhsexhqy6mipbqk7qmlolhynxfhqq7c7h4yzb5pcl5u4ixe4';
@@ -37,7 +37,7 @@ export function musecureMetadata(beat, contractId) {
   };
 }
 
-async function post(path, body, token) {
+export async function post(path, body, token) {
   const r = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -52,7 +52,7 @@ async function post(path, body, token) {
 export const beatAccountStatus = (tokenId) => post('/api/musecure-status', { tokenId });
 
 /** base64 → JSON (el resultado de la llamada al contrato MPC). */
-function decodeResult(outcome) {
+export function decodeResult(outcome) {
   const failure = outcome?.status?.Failure;
   if (failure) throw new Error(`The MPC contract rejected the signature: ${JSON.stringify(failure)}`);
   const value = outcome?.status?.SuccessValue;

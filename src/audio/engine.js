@@ -1,6 +1,6 @@
 // Motor de audio con Tone.js. Lee el estado actual en cada paso a través de getState/getTheory.
 import * as Tone from 'tone';
-import { TRACKS, VEL } from '../music/theory';
+import { TRACKS, VEL, computeTheory } from '../music/theory';
 import { BASSES, LEADS, PADS, liteOsc } from './presets';
 
 /** Segundos que dura una vuelta del beat. */
@@ -598,14 +598,18 @@ export class AudioEngine {
    * Renderiza el beat fuera de tiempo real (Tone.Offline): no depende de la potencia del equipo,
    * así que el WAV sale sin cortes y más rápido que escucharlo. Mismo resultado que recordLoop.
    */
-  async renderOffline(loops = 1, onProgress = () => {}) {
+  async renderOffline(loops = 1, onProgress = () => {}, override = null) {
     await this.init();
     if (this.playing) this.stop();
-    const S = this.getState();
+    // `override`: renderiza otro beat (por ejemplo, un proyecto bajado de IPFS) sin tocar el abierto.
+    const S = override || this.getState();
+    const getState = override ? () => override : this.getState;
+    const theory = override ? computeTheory(override.root, override.scale, override.oct) : null;
+    const getTheory = override ? () => theory : this.getTheory;
     const loopSec = loopSeconds(S) * loops;
     onProgress(0.05);
     const buffer = await Tone.Offline(async (context) => {
-      const eng = new AudioEngine({ getState: this.getState, getTheory: this.getTheory, onStep: noop });
+      const eng = new AudioEngine({ getState, getTheory, onStep: noop });
       eng.recording = true; // sin metrónomo
       await eng.init({ offline: true });
       await eng.reverbReady;
