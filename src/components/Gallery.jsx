@@ -371,7 +371,7 @@ function ClaimBox({ beat: b, onChanged }) {
 }
 
 /** Portada dinámica generada por el contrato (SVG on chain con las notas, nivel e insignias). */
-function Cover({ beat: b }) {
+export function Cover({ beat: b }) {
   const { provider } = useNear();
   const [src, setSrc] = useState('');
   useEffect(() => {

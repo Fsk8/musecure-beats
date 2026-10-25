@@ -129,3 +129,36 @@ El estado cambió (`art` en cada beat, `mpc_contract` en el contrato): la v2 se 
 - Lighthouse releases the key only to a signature from that address, and only the current NFT owner can obtain one
   (`sign_for_beat`). Selling the NFT moves access to the buyer.
 - Upgrade from v2 keeps every beat: deploy with `with-init-call migrate json-args '{}'`.
+
+## v4: Remix Battles
+
+Upgrade (keeps state):
+
+```bash
+cargo near build non-reproducible-wasm
+near contract deploy musecure-beats-v2.testnet use-file target/near/musecure_beats_contract.wasm \
+  with-init-call migrate json-args '{}' prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' \
+  network-config testnet sign-with-keychain send
+```
+
+Critic account with a key that can ONLY call `settle_battle` (0 deposit):
+
+```bash
+near account create-account fund-myself critic.musecure-beats-v2.testnet '1 NEAR' \
+  autogenerate-new-keypair save-to-keychain sign-as musecure-beats-v2.testnet network-config testnet sign-with-keychain send
+near account add-key critic.musecure-beats-v2.testnet grant-function-call-access \
+  --allowance '0.5 NEAR' --contract-account-id musecure-beats-v2.testnet --function-names 'settle_battle' \
+  autogenerate-new-keypair save-to-keychain network-config testnet sign-with-keychain send
+# Opcional: borrar la full access key del crítico para que solo quede la restringida.
+```
+
+Admin (the `owner_id` from `new`):
+
+```bash
+near contract call-function as-transaction musecure-beats-v2.testnet set_critic \
+  json-args '{"critic":"critic.musecure-beats-v2.testnet"}' prepaid-gas '30 Tgas' attached-deposit '0 NEAR' \
+  sign-as <ADMIN> network-config testnet sign-with-keychain send
+near contract call-function as-transaction musecure-beats-v2.testnet create_battle \
+  json-args '{"seed_id":"1","title":"Week 1","rules":"Keep the bassline, change the drums","starts_ms":"<ms>","ends_ms":"<ms>"}' \
+  prepaid-gas '30 Tgas' attached-deposit '1 NEAR' sign-as <ADMIN> network-config testnet sign-with-keychain send
+```

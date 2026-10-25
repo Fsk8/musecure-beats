@@ -2,7 +2,7 @@
 
 **Make a beat in your browser. Mint it as an NFT that owns money, earns cascading royalties, holds its own account on another chain, and keeps its source sealed — and when the NFT is sold, all of that moves to the buyer.**
 
-Built for the NEAR Hackathon (Nov 2026) · Track: **NFTs That Do Something** (secondary: Games)
+Built for the NEAR Hackathon (Nov 2026) · Tracks: **NFTs That Do Something** · **Games** · **Open**
 Part of the [MuSecure](https://github.com/Fsk8/MuSecure-Core-Functions) ecosystem (music authorship on Monad), by Favio & Ingrid — Cochabamba, Bolivia.
 
 - **Live app:** https://musecure-beats.vercel.app
@@ -24,6 +24,16 @@ Part of the [MuSecure](https://github.com/Fsk8/MuSecure-Core-Functions) ecosyste
 | **Access rights that travel** | A **sealed project** is encrypted (Lighthouse) to the NFT's own address. Only the current owner can obtain the key. **Sell the NFT and the buyer can open it; the seller can't.** |
 | **Dynamic NFTs** | The cover is an SVG **generated on chain** from the beat's notes, with a level (1–10) and badges that evolve: Original/Remix, Remixed, Seed, Licensed, Popular, Earns royalties, 1 NEAR earned, Exclusive sold, Collaborative. Standard NEP-177 metadata, so any wallet or explorer sees it up to date. |
 | **NEP-171** | Full NEP-171/177/178/181 implementation (`near-contract-standards` 5.29.1) plus NEP-199 payouts. |
+
+## Remix Battles + The Critic (Games)
+
+Every week there is a **seed beat**. Players remix it in the browser; every open remix of the seed registered inside the battle window is an entry. Anyone can add NEAR to the prize pool.
+
+When the battle closes, **The Critic** — an NPC agent running on **NEAR AI Cloud** (private TEE inference) — reads every entry's project, computes musical features (key, tempo, density, syncopation, how much of the seed it kept and which tracks it changed) and writes a score and a review for each one. NEAR AI signs the model's response; the reviews, the exact request and response, and that signature are published on IPFS so anyone can check them.
+
+The Critic then calls `settle_battle` with a **function-call key that can only call that method** — it can rank entries, it can't move money anywhere. The contract checks that every entry was scored, ranks them and pays **50 / 30 / 20 %** of the pool as **income of the winning NFTs**: half to their owners, half to their authors, and 20 % of the authors' part flows up to the seed. The winner earns the **Battle winner** badge and +2 levels on its on-chain cover.
+
+The economy is the gameplay: a good seed earns from every remix and every prize its remixes win.
 
 ## Try it in 5 minutes ("do X, see Y")
 
@@ -98,7 +108,7 @@ flowchart LR
 
 - **Frontend:** React 18 + Vite 5, Tone.js 14. Drums are pre-rendered into samples for performance; exported WAVs are rendered offline (no glitches, full quality).
 - **Accounts:** Privy email login with NEAR embedded wallets (`@privy-io/react-auth` extended chains). New accounts are activated by a sponsor account; collaborators credited by email get pre-generated NEAR wallets.
-- **Contract:** Rust, `near-sdk` 5.29.1, 45 unit tests. Upgrades keep state (`migrate`).
+- **Contract:** Rust, `near-sdk` 5.29.1, 56 unit tests. Upgrades keep state (`migrate`).
 - **Storage:** WAV and project on IPFS (Lighthouse), SHA-256 hashes on chain. The Lighthouse key never reaches the browser.
 - **MuSecure bridge:** metadata in MuSecure's format, MuSecure's treasury funds the NFT's Monad address, MuSecure's backend signs the score (partner key), and NEAR's MPC network signs `registerWork` for the NFT.
 - **Audio fingerprint:** the same algorithm as MuSecure (ported unchanged), so the same audio produces the same fingerprint in both apps.
@@ -134,6 +144,9 @@ Without `VITE_PRIVY_APP_ID` the app runs read-only: you can make music and brows
 | `LIGHTHOUSE_API_KEY` | server | IPFS uploads and sealed projects |
 | `NEAR_SPONSOR_ACCOUNT_ID`, `NEAR_SPONSOR_PRIVATE_KEY` | server | Activate new accounts |
 | `MUSECURE_API_URL`, `PARTNER_API_KEY` | server | MuSecure bridge (gas + score signature) |
+| `CRON_SECRET` | server | Protects `/api/critic-run` (Vercel cron + manual trigger) |
+| `CRITIC_ACCOUNT_ID`, `CRITIC_PRIVATE_KEY` | server | The critic's account and its key restricted to `settle_battle` |
+| `NEARAI_API_KEY`, `NEARAI_MODEL` | server | NEAR AI Cloud (without a key, a deterministic test critic scores) |
 
 ## Project structure
 
@@ -144,8 +157,8 @@ src/
   components/     Transport, SoundPanel, Mixer, TrackEditor, Gallery, Earnings, RegisterPanel, Drawer…
   near/           Privy + NEAR: signer, contract calls, MuSecure bridge, sealing, certificate
   fingerprint/    MuSecure audio fingerprint (FFmpeg in a Web Worker)
-api/              Vercel functions: activate, upload, resolve-collaborators, musecure-*, seal-*
-contracts/beats/  NEAR contract (Rust): NFT, credits, royalties, leases, dynamic cover, sign_for_beat, sealing
+api/              Vercel functions: activate, upload, resolve-collaborators, musecure-*, seal-*, critic-run
+contracts/beats/  NEAR contract (Rust): NFT, credits, royalties, leases, dynamic cover, sign_for_beat, sealing, battles
 ```
 
 ## Credits

@@ -33,6 +33,7 @@ pub struct Stats {
     pub total_earned_yocto: u128,
     pub exclusive_sold: bool,
     pub credited: bool,
+    pub battle_wins: u32,
 }
 
 const ONE_NEAR: u128 = 1_000_000_000_000_000_000_000_000;
@@ -48,6 +49,7 @@ pub fn badges(s: &Stats) -> Vec<&'static str> {
     if s.total_earned_yocto > 0 { out.push("Earns royalties"); }
     if s.total_earned_yocto >= ONE_NEAR { out.push("1 NEAR earned"); }
     if s.exclusive_sold { out.push("Exclusive sold"); }
+    if s.battle_wins >= 1 { out.push("Battle winner"); }
     if s.credited { out.push("Collaborative"); }
     out
 }
@@ -55,7 +57,7 @@ pub fn badges(s: &Stats) -> Vec<&'static str> {
 /// Nivel del 1 al 10: sube con remixes, licencias y ganancias.
 pub fn level(s: &Stats) -> u32 {
     let earned = (s.total_earned_yocto / (ONE_NEAR / 2)).min(4) as u32;
-    (1 + s.remix_count * 2 + s.lease_count + earned).min(10)
+    (1 + s.remix_count * 2 + s.lease_count + earned + s.battle_wins * 2).min(10)
 }
 
 fn escape(text: &str) -> String {

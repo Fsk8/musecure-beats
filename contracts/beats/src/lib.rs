@@ -35,7 +35,9 @@ use near_sdk::{
     Promise, PromiseOrValue,
 };
 
+mod battles;
 mod dynamic;
+use battles::Battle;
 use dynamic::{beat_path, svg, svg_data_uri, validate_art, Stats};
 
 /// Contrato MPC de Chain Signatures en testnet.
@@ -72,6 +74,8 @@ enum StorageKey {
     Leases,
     ByFingerprint,
     Sealed,
+    Battles,
+    BattleWins,
 }
 
 /// A quién va una parte de los ingresos de autoría: una cuenta o otro beat (el original de un remix).
@@ -228,11 +232,18 @@ pub struct Contract {
     /// Proyecto sellado: CID del proyecto cifrado (Lighthouse) a nombre de la cuenta propia del beat.
     /// Solo quien puede firmar por esa cuenta (el dueño del NFT) obtiene la llave.
     sealed: LookupMap<TokenId, String>,
+    /// Remix Battles (v4).
+    battles: LookupMap<u64, Battle>,
+    next_battle_id: u64,
+    /// Agente crítico: la única cuenta que puede cerrar batallas.
+    critic: Option<AccountId>,
+    /// Batallas ganadas (1er lugar) por cada beat: insignia y nivel.
+    battle_wins: LookupMap<TokenId, u32>,
 }
 
-/// Estado de la v2 (antes de los proyectos sellados), para migrar sin perder beats.
+/// Estado de la v3 (antes de las Remix Battles), para migrar sin perder beats.
 #[near(serializers = [borsh])]
-struct ContractV2 {
+struct ContractV3 {
     tokens: NonFungibleToken,
     metadata: LazyOption<NFTContractMetadata>,
     beats: LookupMap<TokenId, Beat>,
@@ -242,6 +253,7 @@ struct ContractV2 {
     by_fingerprint: LookupMap<String, Vec<TokenId>>,
     next_id: u64,
     mpc_contract: AccountId,
+    sealed: LookupMap<TokenId, String>,
 }
 
 #[near]
@@ -274,14 +286,18 @@ impl Contract {
             next_id: 1,
             mpc_contract: mpc_contract.unwrap_or_else(|| DEFAULT_MPC_CONTRACT.parse().unwrap()),
             sealed: LookupMap::new(StorageKey::Sealed),
+            battles: LookupMap::new(StorageKey::Battles),
+            next_battle_id: 0,
+            critic: None,
+            battle_wins: LookupMap::new(StorageKey::BattleWins),
         }
     }
 
-    /// Migra el estado de la v2 agregando los proyectos sellados. Lo llama el propio contrato al actualizarse.
+    /// Migra el estado de la v3 agregando las Remix Battles. Lo llama el propio contrato al actualizarse.
     #[private]
     #[init(ignore_state)]
     pub fn migrate() -> Self {
-        let old: ContractV2 = env::state_read().unwrap_or_else(|| env::panic_str("No v2 state to migrate"));
+        let old: ContractV3 = env::state_read().unwrap_or_else(|| env::panic_str("No v3 state to migrate"));
         Self {
             tokens: old.tokens,
             metadata: old.metadata,
@@ -292,7 +308,11 @@ impl Contract {
             by_fingerprint: old.by_fingerprint,
             next_id: old.next_id,
             mpc_contract: old.mpc_contract,
-            sealed: LookupMap::new(StorageKey::Sealed),
+            sealed: old.sealed,
+            battles: LookupMap::new(StorageKey::Battles),
+            next_battle_id: 0,
+            critic: None,
+            battle_wins: LookupMap::new(StorageKey::BattleWins),
         }
     }
 
@@ -837,6 +857,7 @@ impl Contract {
             total_earned_yocto: b.total_earned.as_yoctonear(),
             exclusive_sold: b.exclusive_sold,
             credited,
+            battle_wins: self.battle_wins.get(token_id).copied().unwrap_or(0),
         }
     }
 

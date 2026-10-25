@@ -1,4 +1,5 @@
 use super::*;
+use battles::ScoreInput;
 use near_sdk::test_utils::{get_created_receipts, get_logs, VMContextBuilder};
 use near_sdk::testing_env;
 
@@ -625,7 +626,7 @@ fn sign_for_beat_needs_gas() {
 fn dump_sample_cover() {
     // Solo para mirar la portada: MSB_DUMP_SVG=/ruta/archivo.svg cargo test dump_sample_cover
     if let Ok(path) = std::env::var("MSB_DUMP_SVG") {
-        let s = Stats { generation: 1, remix_count: 3, lease_count: 4, total_earned_yocto: 2 * 10u128.pow(24), exclusive_sold: false, credited: true };
+        let s = Stats { generation: 1, remix_count: 3, lease_count: 4, total_earned_yocto: 2 * 10u128.pow(24), exclusive_sold: false, credited: true, battle_wins: 0 };
         let art = "32|0.0.0...0.0.0...0.0.0...0.0.0.0.|....2.......2.......2.......2...|4.3.2.1.0.1.2.3.4.5.6.7.6.5.4.3.|6.......4.......5.......3.......";
         std::fs::write(path, dynamic::svg("Noche en Cochabamba", "7", Some(art), &s)).unwrap();
     }
@@ -669,11 +670,13 @@ fn sealed_beat_cannot_reopen_remixes() {
     c.set_license("1".into(), zero(), true);
 }
 
+
 #[test]
-fn migrate_from_v2_keeps_beats() {
+fn migrate_from_v3_keeps_beats() {
     let mut c = with_original(zero());
-    // Simula el estado de la v2 escribiendo la estructura vieja y migrando.
-    let mut v2 = ContractV2 {
+    set_caller("favio.testnet", zero());
+    c.set_sealed_project("1".into(), "bafysealed".into());
+    let mut v3 = ContractV3 {
         tokens: std::mem::replace(&mut c.tokens, NonFungibleToken::new(StorageKey::NonFungibleToken, acc("x.testnet"), Some(StorageKey::TokenMetadata), Some(StorageKey::Enumeration), Some(StorageKey::Approval))),
         metadata: LazyOption::new(StorageKey::Metadata, None),
         beats: std::mem::replace(&mut c.beats, LookupMap::new(StorageKey::Beats)),
@@ -683,11 +686,169 @@ fn migrate_from_v2_keeps_beats() {
         by_fingerprint: LookupMap::new(StorageKey::ByFingerprint),
         next_id: c.next_id,
         mpc_contract: acc(DEFAULT_MPC_CONTRACT),
+        sealed: std::mem::replace(&mut c.sealed, LookupMap::new(StorageKey::Sealed)),
     };
-    v2.beats.flush(); // las colecciones de near_sdk::store guardan en caché hasta que se vacían
-    near_sdk::env::state_write(&v2);
+    v3.beats.flush();
+    v3.sealed.flush();
+    near_sdk::env::state_write(&v3);
     set_caller("beats.testnet", zero());
     let migrated = Contract::migrate();
-    assert_eq!(migrated.get_beat("1".into()).unwrap().title, "Original");
-    assert!(migrated.get_beat("1".into()).unwrap().sealed_cid.is_none());
+    let b = migrated.get_beat("1".into()).unwrap();
+    assert_eq!(b.title, "Original");
+    assert_eq!(b.sealed_cid.as_deref(), Some("bafysealed"));
+    assert!(migrated.get_battles(None).is_empty());
+    assert!(migrated.get_critic().is_none());
+}
+
+// ---------- Remix Battles
+
+const T0: u64 = 1_700_000_000_000; // ms de set_caller
+
+fn at(caller: &str, deposit: NearToken, ms: u64) {
+    let mut b = VMContextBuilder::new();
+    b.current_account_id(acc("beats.testnet"))
+        .predecessor_account_id(acc(caller))
+        .signer_account_id(acc(caller))
+        .attached_deposit(deposit)
+        .account_balance(NearToken::from_near(100))
+        .block_timestamp(ms * 1_000_000);
+    testing_env!(b.build());
+}
+
+/// Semilla "1", batalla 0 de T0 a T0+1000 con 10 NEAR, crítico "critic.testnet".
+fn with_battle() -> Contract {
+    let mut c = with_original(zero());
+    at("owner.testnet", near(10), T0 - 10);
+    let id = c.create_battle("1".into(), "Week 1".into(), "Keep the bass".into(), U64(T0), U64(T0 + 1000));
+    assert_eq!(id, 0);
+    at("owner.testnet", zero(), T0 - 10);
+    c.set_critic(Some(acc("critic.testnet")));
+    c
+}
+
+fn enter(c: &mut Contract, who: &str, ms: u64) -> TokenId {
+    at(who, zero(), ms);
+    c.remix("1".into(), args(&format!("Remix {who}"), whole(&[]), zero())).token_id
+}
+
+fn sc(t: &str, score: u32) -> ScoreInput {
+    ScoreInput { token_id: t.into(), score }
+}
+
+#[test]
+#[should_panic(expected = "Only the contract admin")]
+fn only_admin_creates_battles() {
+    let mut c = with_original(zero());
+    at("favio.testnet", zero(), T0);
+    c.create_battle("1".into(), "x".into(), "".into(), U64(T0), U64(T0 + 1));
+}
+
+#[test]
+fn battle_entries_and_funding() {
+    let mut c = with_battle();
+    enter(&mut c, "early.testnet", T0 - 1); // antes de abrir
+    let a = enter(&mut c, "ana.testnet", T0 + 10);
+    let b = enter(&mut c, "beto.testnet", T0 + 20);
+    enter(&mut c, "late.testnet", T0 + 1000); // ya cerró
+    assert_eq!(c.get_battle_entries(0), vec![a, b]);
+    at("fan.testnet", near(2), T0 + 30);
+    assert_eq!(c.fund_battle(0), near(12));
+    let v = c.get_battle(0).unwrap();
+    assert_eq!(v.entry_count, 2);
+    assert_eq!(v.pool, near(12));
+}
+
+#[test]
+fn sealed_remix_is_not_an_entry() {
+    let mut c = with_battle();
+    let a = enter(&mut c, "ana.testnet", T0 + 10);
+    at("ana.testnet", zero(), T0 + 11);
+    c.set_sealed_project(a, "bafysealed".into());
+    assert!(c.get_battle_entries(0).is_empty());
+}
+
+#[test]
+fn settle_pays_50_30_20_and_badge() {
+    let mut c = with_battle();
+    let a = enter(&mut c, "ana.testnet", T0 + 10);
+    let b = enter(&mut c, "beto.testnet", T0 + 20);
+    let d = enter(&mut c, "dani.testnet", T0 + 30);
+    let e = enter(&mut c, "eva.testnet", T0 + 40);
+    at("critic.testnet", zero(), T0 + 1000);
+    let res = c.settle_battle(0, vec![sc(&a, 70), sc(&b, 90), sc(&d, 80), sc(&e, 10)], "bafyreviews".into());
+    let order: Vec<_> = res.iter().map(|r| (r.token_id.clone(), r.prize)).collect();
+    assert_eq!(order, vec![(b.clone(), near(5)), (d.clone(), near(3)), (a.clone(), near(2)), (e.clone(), zero())]);
+    // El premio es ingreso: mitad al dueño del remix, mitad a sus autores.
+    assert_eq!(c.get_owner_earnings(acc("beto.testnet")), milli(2500));
+    assert_eq!(c.get_beat(b.clone()).unwrap().authors_balance, milli(2500));
+    assert!(c.get_beat(b.clone()).unwrap().badges.contains(&"Battle winner".to_string()));
+    assert!(!c.get_beat(d).unwrap().badges.contains(&"Battle winner".to_string()));
+    let v = c.get_battle(0).unwrap();
+    assert!(v.settled);
+    assert_eq!(v.review_cid.as_deref(), Some("bafyreviews"));
+}
+
+#[test]
+fn settle_with_two_entries_normalizes() {
+    let mut c = with_battle();
+    let a = enter(&mut c, "ana.testnet", T0 + 10);
+    let b = enter(&mut c, "beto.testnet", T0 + 20);
+    at("critic.testnet", zero(), T0 + 1000);
+    let res = c.settle_battle(0, vec![sc(&a, 50), sc(&b, 50)], "bafy".into());
+    // Empate: gana el que llegó antes. 5/8 y 3/8 de 10 NEAR.
+    assert_eq!(res[0].token_id, a);
+    assert_eq!(res[0].prize, NearToken::from_yoctonear(near(10).as_yoctonear() * 5 / 8));
+    assert_eq!(res[1].prize, NearToken::from_yoctonear(near(10).as_yoctonear() * 3 / 8));
+}
+
+#[test]
+fn settle_without_entries_returns_pool_to_admin() {
+    let mut c = with_battle();
+    at("critic.testnet", zero(), T0 + 1000);
+    assert!(c.settle_battle(0, vec![], "bafy".into()).is_empty());
+    assert_eq!(c.get_owner_earnings(acc("owner.testnet")), near(10));
+}
+
+#[test]
+#[should_panic(expected = "Only the critic")]
+fn only_critic_settles() {
+    let mut c = with_battle();
+    at("owner.testnet", zero(), T0 + 1000);
+    c.settle_battle(0, vec![], "bafy".into());
+}
+
+#[test]
+#[should_panic(expected = "still open")]
+fn cannot_settle_early() {
+    let mut c = with_battle();
+    at("critic.testnet", zero(), T0 + 999);
+    c.settle_battle(0, vec![], "bafy".into());
+}
+
+#[test]
+#[should_panic(expected = "Score every entry")]
+fn critic_must_score_everyone() {
+    let mut c = with_battle();
+    let a = enter(&mut c, "ana.testnet", T0 + 10);
+    enter(&mut c, "beto.testnet", T0 + 20);
+    at("critic.testnet", zero(), T0 + 1000);
+    c.settle_battle(0, vec![sc(&a, 90)], "bafy".into());
+}
+
+#[test]
+#[should_panic(expected = "not an entry")]
+fn critic_cannot_reward_outsiders() {
+    let mut c = with_battle();
+    enter(&mut c, "ana.testnet", T0 + 10);
+    at("critic.testnet", zero(), T0 + 1000);
+    c.settle_battle(0, vec![sc("1", 90)], "bafy".into());
+}
+
+#[test]
+#[should_panic(expected = "already settled")]
+fn cannot_settle_twice() {
+    let mut c = with_battle();
+    at("critic.testnet", zero(), T0 + 1000);
+    c.settle_battle(0, vec![], "bafy".into());
+    c.settle_battle(0, vec![], "bafy".into());
 }

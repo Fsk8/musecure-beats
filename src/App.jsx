@@ -19,6 +19,7 @@ import { AccountBar } from './components/AccountBar';
 import { Gallery } from './components/Gallery';
 import { Drawer } from './components/Drawer';
 import { Earnings } from './components/Earnings';
+import { Battles } from './components/Battles';
 import { RegisterPanel } from './components/RegisterPanel';
 
 export default function App() {
@@ -42,7 +43,7 @@ export default function App() {
   const toggleDrawer = (id) => setDrawer((d) => (d === id ? null : id));
   // Botones como "Registrar beat" piden abrir un panel con este evento.
   useEffect(() => {
-    const onOpen = (e) => { if (['save', 'register', 'gallery', 'earnings'].includes(e.detail)) setDrawer(e.detail); };
+    const onOpen = (e) => { if (['save', 'register', 'gallery', 'earnings', 'battles'].includes(e.detail)) setDrawer(e.detail); };
     window.addEventListener('msb:open-panel', onOpen);
     return () => window.removeEventListener('msb:open-panel', onOpen);
   }, []);
@@ -282,7 +283,7 @@ export default function App() {
 
   const subtitle = `${KITS[S.kit].name} · ${ROOTS[S.root][0]} ${SCALES[S.scale][0].toLowerCase()} · ${S.len} steps`;
 
-  const drawerTitles = { save: 'Save & export', register: 'Register on NEAR', gallery: 'Beats on NEAR', earnings: 'My earnings' };
+  const drawerTitles = { save: 'Save & export', register: 'Register on NEAR', gallery: 'Beats on NEAR', earnings: 'My earnings', battles: 'Remix Battles' };
 
   return (
     <>
@@ -309,6 +310,7 @@ export default function App() {
           Register on NEAR{S.remixOf ? ` · remix of #${S.remixOf.token_id}` : ''}
         </button>
         <button aria-pressed={drawer === 'gallery'} onClick={() => toggleDrawer('gallery')}>Gallery</button>
+        <button aria-pressed={drawer === 'battles'} onClick={() => toggleDrawer('battles')}>Battles</button>
         <button aria-pressed={drawer === 'earnings'} onClick={() => toggleDrawer('earnings')}>My earnings</button>
       </nav>
 
@@ -377,6 +379,9 @@ export default function App() {
       </div>
       <div hidden={drawer !== 'register'}>
       <RegisterPanel title={S.title} buildFiles={buildRegisterFiles} remixOf={S.remixOf} beat={S} onRegistered={clearRemix} />
+      </div>
+      <div hidden={drawer !== 'battles'}>
+        {drawer === 'battles' && <Battles onOpenProject={openFromGallery} />}
       </div>
       <div hidden={drawer !== 'earnings'}>
         {drawer === 'earnings' && <Earnings />}
