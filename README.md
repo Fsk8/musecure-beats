@@ -1,97 +1,153 @@
 # MuSecure Beats
 
-Secuenciador musical en el navegador: haces un beat jugando y, más adelante, lo registras on chain con autoría, créditos y regalías por remix. Forma parte del ecosistema [MuSecure](https://github.com/Fsk8/MuSecure-Core-Functions).
+**Make a beat in your browser. Mint it as an NFT that owns money, earns cascading royalties, holds its own account on another chain, and keeps its source sealed — and when the NFT is sold, all of that moves to the buyer.**
 
-Estado actual: prototipo de sonido, sin blockchain todavía. El beat se guarda en el navegador (localStorage).
+Built for the NEAR Hackathon (Nov 2026) · Track: **NFTs That Do Something** (secondary: Games)
+Part of the [MuSecure](https://github.com/Fsk8/MuSecure-Core-Functions) ecosystem (music authorship on Monad), by Favio & Ingrid — Cochabamba, Bolivia.
 
-## Qué hace hoy
+- **Live app:** https://musecure-beats.vercel.app
+- **Contract (NEAR testnet):** [`musecure-beats-v2.testnet`](https://testnet.nearblocks.io/address/musecure-beats-v2.testnet)
+- **Demo video:** _TODO_
 
-- 4 pistas: batería, bajo, lead y acordes, cada una con volumen, mute, reverb y delay.
-- Largo de 16, 32 o 64 pasos, con páginas de 16.
-- Raíz, escala y modo: la melodía, el bajo y los acordes siempre siguen la escala elegida.
-- Kits de batería: clásico, 808, acústico, lo-fi y andino (sintetizados).
-- Velocidad y probabilidad por nota, swing, filtro maestro y arpegiador.
-- Alinear pista (cuantizar) a corcheas o negras, con deshacer.
-- "Sorpréndeme" por pista o para todo el beat.
+---
 
-## Cómo probarlo
+## Why this fits "NFTs That Do Something"
 
-1. `pnpm install` (si no tienes pnpm: `npm install -g pnpm`)
-2. `pnpm dev` y abre la dirección que muestra la terminal (normalmente http://localhost:5173).
-3. Presiona **▶ Tocar**: suena el beat de ejemplo.
-4. Haz clic en una celda de la cuadrícula: la nota suena y queda marcada.
-5. Cambia **Escala** a "Frigio": el mismo patrón suena en otro modo.
-6. Presiona **Alinear pista**: las notas a destiempo pasan al pulso más cercano.
+> "Build NFTs as accounts — assets that own money, earn royalties, hold inventory, carry credentials, memberships or access rights. Ownership with behavior."
 
-## Configuración (login y contrato)
+| The track asks for… | What a MuSecure Beats NFT does |
+|---|---|
+| **Owns money** | Every NFT keeps its own *authors' balance* inside the contract. Anyone can trigger `claim`, and the money always goes to the credited authors — never to the caller. |
+| **Earns royalties** | 50 % of every income goes to the current owner, 50 % to the authors. Remixes send 20 % of their authors' share **up to the original, in cascade** across the whole remix tree. 10 % of every resale goes to the authors (also exposed as NEP-199 payouts for external marketplaces). |
+| **Holds inventory / is an account** | Each NFT has **its own EVM address**, derived by NEAR's MPC network from the contract and the path `beat-<id>` (**Chain Signatures**). Only the current NFT owner can make it sign (`sign_for_beat`). We use it to certify the beat on MuSecure (Monad) — the certificate belongs to the NFT, not to a person. |
+| **Carries credentials / access rights** | Non-exclusive licenses are on-chain credentials (`has_lease`), verifiable by anyone (a distributor, a label, a platform). Licensees get stems and a license certificate. |
+| **Access rights that travel** | A **sealed project** is encrypted (Lighthouse) to the NFT's own address. Only the current owner can obtain the key. **Sell the NFT and the buyer can open it; the seller can't.** |
+| **Dynamic NFTs** | The cover is an SVG **generated on chain** from the beat's notes, with a level (1–10) and badges that evolve: Original/Remix, Remixed, Seed, Licensed, Popular, Earns royalties, 1 NEAR earned, Exclusive sold, Collaborative. Standard NEP-177 metadata, so any wallet or explorer sees it up to date. |
+| **NEP-171** | Full NEP-171/177/178/181 implementation (`near-contract-standards` 5.29.1) plus NEP-199 payouts. |
 
-1. Copia `.env.example` como `.env.local`.
-2. Completa `VITE_PRIVY_APP_ID` con el App ID de tu app en [Privy](https://dashboard.privy.io/).
-3. En el dashboard de Privy, agrega `http://localhost:5173` y tu dirección de Vercel como dominios permitidos.
-4. Completa `LIGHTHOUSE_API_KEY` con tu API key de Lighthouse. No lleva el prefijo `VITE_`, así que solo la usa el servidor (`api/upload.js`) y nunca llega al navegador.
-5. Para la activación automática de cuentas, completa `NEAR_SPONSOR_ACCOUNT_ID`, `NEAR_SPONSOR_PRIVATE_KEY` y `PRIVY_JWKS_URL` (ver `.env.example`). La cuenta patrocinadora regala 0,05 NEAR de testnet a cada usuario nuevo con sesión de Privy.
-6. Para acreditar colaboradores por email, completa `PRIVY_APP_SECRET` (el mismo App Secret que usa MuSecure). El servidor le pide a Privy la cuenta NEAR ligada a ese email y la crea si la persona nunca entró, igual que `/api/resolve-collaborators` en MuSecure. El email no se guarda ni en la blockchain ni en IPFS.
-7. En Vercel, agrega todas las variables en *Settings → Environment Variables*.
+## Try it in 5 minutes ("do X, see Y")
 
-Sin App ID la app funciona igual, pero en solo lectura: se puede crear música y ver los beats registrados, sin iniciar sesión.
+1. **Open the app and press ▶ Play.** You hear the example beat. Click cells, change **Scale**, try **Surprise me (all)** — every pattern follows the chosen key.
+2. **Sign in with email.** Privy creates a NEAR account for you; the server sponsors 0.05 testnet NEAR to activate it. No wallet, no seed phrase.
+3. **Register on NEAR.** Name the beat, optionally credit a collaborator **by email** (they get a NEAR account tied to that email, even if they never signed in), pick **Open** or **Sealed**, set remix and license prices, and press **Register beat**. The WAV is rendered offline and uploaded to IPFS; its SHA-256 and the MuSecure audio fingerprint are stored on chain.
+4. **Gallery → your beat.** You see the **cover generated by the contract** with your notes, "Lv 1" and the badge "Original". Press **Verify audio**: the app downloads the WAV from IPFS and checks it against the on-chain hash.
+5. **Details → MuSecure (Monad) → Register on MuSecure from the NFT account.** One NEAR transaction; NEAR's MPC network signs a Monad transaction **as the NFT**. The beat appears as a MuSecure certificate owned by the NFT's address.
+6. **From a second account:** buy a non-exclusive license (badge "Licensed" appears), download the **stems** and the **license certificate**, or **Remix** the beat — the app shows how much of the original you kept (≥ 30 % → it's a remix and pays the remix license).
+7. **Owner controls → List for sale. Second account → Buy NFT.** The authors get 10 %; the buyer now controls the NFT's Monad account and can **open the sealed project**, while the seller no longer can.
+8. **My earnings.** Owner earnings to withdraw, the money sitting inside each NFT, and one-click **Distribute** to the authors.
 
-## Registro en MuSecure (Monad) con Chain Signatures
+## Live proof (testnet)
 
-Cada beat registrado en NEAR se puede certificar también en MuSecure (Monad), sin wallets nuevas:
+| Step | Transaction |
+|---|---|
+| Register a beat | _TODO_ |
+| `sign_for_beat` → MuSecure certificate on Monad | NEAR: _TODO_ · Monad: _TODO_ |
+| Seal a project (`set_sealed_project`) | _TODO_ |
+| Buy a non-exclusive license | _TODO_ |
+| Remix (pays the original) | _TODO_ |
+| Sell the NFT (`buy`) | _TODO_ |
+| Distribute authors' balance (`claim`) | _TODO_ |
 
-1. En la galería, abre **Detalles** de un beat tuyo y presiona **Registrar en MuSecure (Monad) con Chain Signatures**.
-2. La app sube la metadata en el formato de MuSecure (`src/near/musecure.js`) y el servidor (`api/musecure-prepare.js`):
-   comprueba que la cuenta NEAR y el beat son tuyos, calcula tu dirección EVM derivada (contrato MPC `v1.signer-prod.testnet`,
-   ruta `musecure`), pide gas de testnet a la tesorería de MuSecure y la firma del score, y arma la transacción `registerWork`.
-3. Tu cuenta NEAR firma una sola transacción al contrato MPC; la red MPC de NEAR devuelve la firma ECDSA de la transacción de Monad.
-4. `api/musecure-broadcast.js` verifica que la firma corresponde a tu dirección derivada y la envía a Monad.
+## How the money flows
 
-El beat aparece en el Explorer de MuSecure con el atributo "Origen: MuSecure Beats (NEAR)". Se registra con score 0 y la
-metadata aclara que no pasó por el análisis de catálogo de MuSecure.
+Each beat has two separate rights, as in the music industry:
 
-## Proyectos sellados (cifrados a nombre del NFT)
+- **Authors** (like *publishing*): the creator and the credited collaborators. **Never change.** If credits add up to less than 100 %, the rest belongs to the creator.
+- **Owner** (like the *master*): whoever holds the NFT. Changes when the NFT is sold.
 
-Al registrar, el artista elige **Open** (proyecto público, remixable) o **Sealed**. Sellado: el proyecto se cifra con Lighthouse
-a nombre de la **dirección EVM propia del NFT** (Chain Signatures). Lighthouse solo entrega la llave con una firma de esa
-dirección, que solo puede pedir el dueño actual del NFT (`sign_for_beat`). Si el NFT se vende, el acceso pasa al comprador.
-El servidor (`api/seal-*.js`) verifica la sesión y la firma, pero no guarda llaves: sin una firma nueva del dueño no puede descifrar.
-Los remixes y los stems para licenciatarios se desactivan en beats sellados; el WAV de la mezcla sigue público para escuchar.
+| Income | Split |
+|---|---|
+| Non-exclusive license, remix license, support | **50 %** to the current owner (withdraw) · **50 %** stays inside the NFT as the authors' balance (distribute) |
+| A remix's authors' balance | **20 %** goes up to the original beat as income (split 50/50 again there) · 80 % to the remix's authors |
+| NFT sale | **90 %** to the seller · **10 %** to the authors' balance |
 
-## Código reutilizado de MuSecure
+Selling the NFT moves future owner earnings, price controls, the NFT's Monad account and the sealed-project key to the buyer. Credits never move. New non-exclusive licenses close (the exclusive changed hands); existing ones stay valid.
 
-`src/fingerprint/` es un port del worker de huella acústica de [MuSecure](https://github.com/Fsk8/MuSecure-Core-Functions) (`src/workers/audioFingerprint.worker.ts`), proyecto previo del mismo equipo. El algoritmo no cambia y se usan las mismas versiones de FFmpeg, para que el mismo audio produzca la misma huella en ambas apps. Está aislado como módulo para convertirlo más adelante en un paquete compartido del ecosistema (`@musecure/fingerprint`).
+## Architecture
 
-## Estructura
+```mermaid
+flowchart LR
+  subgraph Browser
+    S[Sequencer<br/>Tone.js, offline render]
+    G[Gallery · Earnings · Register]
+  end
+  subgraph Vercel["Vercel functions (/api)"]
+    A[activate · upload · resolve-collaborators]
+    M[musecure-prepare / broadcast]
+    SE[seal-message / upload / open]
+  end
+  subgraph NEAR
+    C[musecure-beats-v2.testnet<br/>NFT · credits · royalties · leases]
+    MPC[v1.signer-prod.testnet<br/>Chain Signatures]
+  end
+  subgraph Monad
+    R[MuSecureRegistry]
+  end
+  L[(IPFS / Lighthouse)]
+  P[Privy]
+
+  S --> G
+  G -- email login --> P
+  G -- register, buy, remix, claim --> C
+  G --> A
+  A -- WAV + project --> L
+  C -- sign_for_beat --> MPC
+  M -- registerWork signed by the NFT's address --> R
+  SE -- encrypt to the NFT's address --> L
+```
+
+- **Frontend:** React 18 + Vite 5, Tone.js 14. Drums are pre-rendered into samples for performance; exported WAVs are rendered offline (no glitches, full quality).
+- **Accounts:** Privy email login with NEAR embedded wallets (`@privy-io/react-auth` extended chains). New accounts are activated by a sponsor account; collaborators credited by email get pre-generated NEAR wallets.
+- **Contract:** Rust, `near-sdk` 5.29.1, 45 unit tests. Upgrades keep state (`migrate`).
+- **Storage:** WAV and project on IPFS (Lighthouse), SHA-256 hashes on chain. The Lighthouse key never reaches the browser.
+- **MuSecure bridge:** metadata in MuSecure's format, MuSecure's treasury funds the NFT's Monad address, MuSecure's backend signs the score (partner key), and NEAR's MPC network signs `registerWork` for the NFT.
+- **Audio fingerprint:** the same algorithm as MuSecure (ported unchanged), so the same audio produces the same fingerprint in both apps.
+
+## Honest limits (and next steps)
+
+- **Trusted server pieces.** Account activation, credits by email and the MuSecure bridge run in Vercel functions with server-side keys. Sealing: the server verifies the NFT's signature and handles the project in memory while encrypting/decrypting, but stores no keys — without a fresh signature from the NFT owner it cannot decrypt.
+- **Open projects are public.** For open beats, anyone could rebuild the stems from the public project; the license is the verifiable *right* to use them. Sealed beats protect the project but turn off remixes.
+- **Licensees can't open sealed projects automatically.** Lighthouse access conditions don't support NEAR yet; the next step is a NEAR-aware condition (or sharing per license, signed by the NFT).
+- **Score 0 on MuSecure.** Beats registered from the sequencer skip MuSecure's catalog analysis; their metadata says so ("Catalog analysis: No").
+- **Testnet only.** Not audited.
+
+## Run it locally
+
+```bash
+pnpm install
+cp .env.example .env.local   # fill in the values (see the comments in the file)
+pnpm dev                     # http://localhost:5173
+```
+
+Without `VITE_PRIVY_APP_ID` the app runs read-only: you can make music and browse registered beats.
+
+**Contract:** see [contracts/beats/README.md](contracts/beats/README.md) (build with `cargo near build non-reproducible-wasm`, tests with `cargo test`).
+
+### Environment variables
+
+| Variable | Where | Purpose |
+|---|---|---|
+| `VITE_PRIVY_APP_ID` | browser + server | Privy app (shared with MuSecure) |
+| `VITE_NEAR_CONTRACT` | browser + server | Beats contract account |
+| `PRIVY_JWKS_URL` (or `PRIVY_VERIFICATION_KEY`) | server | Verify Privy sessions |
+| `PRIVY_APP_SECRET` | server | Pre-generate NEAR wallets for collaborators by email |
+| `LIGHTHOUSE_API_KEY` | server | IPFS uploads and sealed projects |
+| `NEAR_SPONSOR_ACCOUNT_ID`, `NEAR_SPONSOR_PRIVATE_KEY` | server | Activate new accounts |
+| `MUSECURE_API_URL`, `PARTNER_API_KEY` | server | MuSecure bridge (gas + score signature) |
+
+## Project structure
 
 ```
 src/
-  music/theory.js     escalas, acordes, nombres de filas (sin audio)
-  music/patterns.js   estado del beat, aleatorio, cuantizar, reto
-  audio/engine.js     motor de audio con Tone.js
-  state/useBeatState.js  estado persistido en localStorage
-  components/         Transport, SoundPanel, Mixer, TrackEditor, Challenge, AccountBar, Gallery
-  near/               Privy + NEAR: configuración, firmante, cuenta, lecturas y registro
-  fingerprint/        huella acústica de MuSecure (FFmpeg en un Web Worker)
-  App.jsx             une estado, motor y componentes
-api/upload.js         función de Vercel: sube a IPFS con Lighthouse (la clave queda en el servidor)
-api/activate.js       función de Vercel: activa cuentas nuevas de Privy con NEAR de patrocinio
-api/resolve-collaborators.js  función de Vercel: email del colaborador → su cuenta NEAR de Privy
-api/_lib/             código compartido: verificación de sesión de Privy y puente a MuSecure (Chain Signatures)
-api/musecure-*.js     funciones de Vercel para registrar beats en MuSecure (Monad)
-contracts/beats/      contrato de NEAR en Rust (NFT NEP-171, créditos, remix, regalías)
+  audio/          engine.js (Tone.js, offline render, drum samples), presets.js (40 sounds)
+  music/          theory.js (scales, chords), patterns.js (state, generators, similarity, art)
+  components/     Transport, SoundPanel, Mixer, TrackEditor, Gallery, Earnings, RegisterPanel, Drawer…
+  near/           Privy + NEAR: signer, contract calls, MuSecure bridge, sealing, certificate
+  fingerprint/    MuSecure audio fingerprint (FFmpeg in a Web Worker)
+api/              Vercel functions: activate, upload, resolve-collaborators, musecure-*, seal-*
+contracts/beats/  NEAR contract (Rust): NFT, credits, royalties, leases, dynamic cover, sign_for_beat, sealing
 ```
 
-El contrato tiene su propia guía en [contracts/beats/README.md](contracts/beats/README.md).
+## Credits
 
-## Stack
-
-React 18 + Vite 5, Tone.js 14, pnpm 10. Desplegado en Vercel.
-
-pnpm no ejecuta scripts de instalación de dependencias por defecto. El de esbuild queda bloqueado y no hace falta: la build funciona sin él.
-
-## Próximos pasos
-
-- Login con Privy (cuenta NEAR por email) y gas patrocinado con meta transacciones (NEP-366).
-- Contrato NFT (NEP-171) en NEAR testnet: registrar beat, créditos por pista o por conjunto, remix con regalías en cascada.
-- Subir el WAV y el JSON del patrón a IPFS al registrar.
-- Unir el catálogo con MuSecure (Monad) por la huella de audio, y más adelante anclar cada registro en MuSecureRegistry con Chain Signatures.
+Favio (music, product, build) and Ingrid (MuSecure co-creator). `src/fingerprint/` is ported from MuSecure (`src/workers/audioFingerprint.worker.ts`). Every sound is synthesized in the browser — no third-party samples.
