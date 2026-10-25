@@ -113,7 +113,9 @@ export function features(seed, s) {
     sounds: { lead: s.wave, bass: s.bassSound, chords: s.pad },
     notes_per_track: Object.fromEntries(TRACKS.map((name, t) => [name, notesOf(s, t)])),
     syncopation_pct: syncopation(s),
-    kept_from_seed_pct: sim.overall,
+    // Melódico (bajo, lead, acordes) = el criterio de 30 % para ser remix. Total = las 4 pistas.
+    kept_melodic_pct: sim.overall,
+    kept_all_tracks_pct: sim.tracks.filter((v) => v !== null).length ? Math.round(sim.tracks.filter((v) => v !== null).reduce((a, v) => a + v, 0) / sim.tracks.filter((v) => v !== null).length) : 100,
     kept_per_track_pct: Object.fromEntries(TRACKS.map((name, t) => [name, sim.tracks[t]])),
     muted_tracks: TRACKS.filter((_, t) => s.mix?.[t]?.mute),
   };
@@ -123,7 +125,7 @@ export function features(seed, s) {
 
 const SYSTEM = `You are "The Critic", a demanding but fair music critic NPC in MuSecure Beats, a game where producers remix a weekly seed beat.
 You cannot hear audio: you receive objective features computed from each remix's sequencer project, plus the week's rules.
-Judge each remix on: (1) following the rules, (2) creativity — how much it transforms the seed while keeping its identity (around 30-70% kept is the sweet spot), (3) groove and arrangement (density balance, syncopation, tempo), (4) coherence.
+Judge each remix on: (1) following the rules, (2) creativity — how much it transforms the seed while keeping its identity (kept_all_tracks_pct around 30-70% is the sweet spot; kept_melodic_pct must stay >= 30 for it to count as a remix), (3) groove and arrangement (density balance, syncopation, tempo), (4) coherence.
 Give every remix an integer score from 0 to 100 and a short review (2-3 sentences, witty, specific to the numbers, no emojis). Never give two remixes the same score unless they are truly identical.
 Answer ONLY with JSON: {"reviews":[{"token_id":"<id>","score":<0-100>,"review":"<text>"}]} with one entry per remix, in any order.`;
 
@@ -139,7 +141,7 @@ function userPrompt(battle, seedFeatures, entries) {
 function mockReviews(entries) {
   return entries.map((e) => {
     const f = e.features;
-    const kept = f.kept_from_seed_pct;
+    const kept = f.kept_all_tracks_pct;
     const creativity = 40 - Math.min(40, Math.abs(kept - 50) * 0.8);
     const notes = Object.values(f.notes_per_track);
     const active = notes.filter((n) => n > 0).length;
@@ -224,7 +226,8 @@ export async function judgeBattle(battle) {
   const seedBeat = await view('get_beat', { token_id: battle.seed_id });
   const seed = await loadProject(seedBeat);
   const seedFeatures = features(seed, seed);
-  delete seedFeatures.kept_from_seed_pct;
+  delete seedFeatures.kept_melodic_pct;
+  delete seedFeatures.kept_all_tracks_pct;
   delete seedFeatures.kept_per_track_pct;
 
   const entries = [];
@@ -239,7 +242,7 @@ export async function judgeBattle(battle) {
   }
   const readable = entries.filter((e) => e.features);
 
-  let mode = 'test';
+  let mode = readable.length ? 'test' : 'no-entries';
   let raw = { reviews: [] };
   if (readable.length && process.env.NEARAI_API_KEY) {
     raw = await nearAiReviews(battle, seedFeatures, readable);
@@ -258,7 +261,7 @@ export async function judgeBattle(battle) {
     contract: BEATS_CONTRACT,
     battle_id: battle.id,
     battle: { title: battle.title, rules: battle.rules, seed_id: battle.seed_id },
-    critic: mode === 'nearai' ? { mode, provider: 'NEAR AI Cloud (private TEE inference)', model: NEARAI_MODEL } : { mode, note: 'Test critic (no NEAR AI key configured)' },
+    critic: mode === 'nearai' ? { mode, provider: 'NEAR AI Cloud (private TEE inference)', model: NEARAI_MODEL } : { mode, note: mode === 'no-entries' ? 'No readable entries: nothing to judge' : 'Test critic (no NEAR AI key configured)' },
     judged_at: new Date().toISOString(),
     reviews,
     attestation: raw.attestation || null,
