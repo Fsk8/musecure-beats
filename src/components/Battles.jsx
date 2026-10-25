@@ -34,7 +34,7 @@ function Reviews({ battle, beats }) {
   const [error, setError] = useState('');
   useEffect(() => {
     if (!battle.review_cid) return;
-    fetchIpfs(battle.review_cid).then((r) => r.json()).then(setReport).catch((e) => setError(e.message));
+        fetchIpfs(battle.review_cid).then(async (b) => JSON.parse(await b.text())).then(setReport).catch((e) => setError(e.message));
   }, [battle.review_cid]);
 
   const reviewOf = (id) => report?.reviews?.find((r) => r.token_id === id);
