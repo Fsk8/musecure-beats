@@ -156,7 +156,7 @@ function BattleCard({ battle, now, onRemix, onChanged }) {
         </div>
       )}
       {p === 'open' && <p className="hint">Make your remix, keep at least 30 % of the seed, and register it as an <strong>Open</strong> beat before the deadline. It enters automatically.</p>}
-      {!battle.settled && <FundBox battle={battle} onChanged={onChanged} />}
+      {(p === 'open' || p === 'upcoming') && <FundBox battle={battle} onChanged={onChanged} />}
 
       {!battle.settled && entries.length > 0 && (
         <ul className="credit-list">

@@ -106,6 +106,7 @@ impl Contract {
         require!(!amount.is_zero(), "Attach some NEAR to fund the prize");
         let battle = self.battles.get_mut(&battle_id).unwrap_or_else(|| env::panic_str("Battle not found"));
         require!(!battle.settled, "This battle is already settled");
+        require!(now_ms() < battle.ends_ms, "This battle is closed");
         battle.pool = battle.pool.saturating_add(amount);
         let pool = battle.pool;
         log_event(

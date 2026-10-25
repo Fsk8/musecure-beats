@@ -852,3 +852,11 @@ fn cannot_settle_twice() {
     c.settle_battle(0, vec![], "bafy".into());
     c.settle_battle(0, vec![], "bafy".into());
 }
+
+#[test]
+#[should_panic(expected = "This battle is closed")]
+fn cannot_fund_after_close() {
+    let mut c = with_battle();
+    at("fan.testnet", near(1), T0 + 1000);
+    c.fund_battle(0);
+}
