@@ -70,9 +70,10 @@ function FundBox({ battle, onChanged }) {
   const [amount, setAmount] = useState('0.5');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  if (status !== 'ready') {
+  if (status === 'signed-out') {
     return <button className="mini" onClick={login}>Sign in to fund the prize</button>;
   }
+  if (status !== 'active') return <p className="hint">Activate your NEAR account to fund the prize.</p>;
   async function fund() {
     setBusy(true);
     setMsg('');
