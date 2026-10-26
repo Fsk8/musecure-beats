@@ -19,7 +19,7 @@ const GATEWAYS = ['https://gateway.lighthouse.storage/ipfs/', 'https://dweb.link
 const TRACKS = ['Drums', 'Bass', 'Lead', 'Chords'];
 const SCALES = {
   pmen: 'Minor pentatonic', pmay: 'Major pentatonic', blues: 'Blues', jon: 'Major', eol: 'Natural minor',
-  dor: 'Dorian', fri: 'Phrygian', lid: 'Lydian', mix: 'Mixolydian', loc: 'Locrian', arm: 'Harmonic minor',
+  dor: 'Dorian', fri: 'Phrygian', lid: 'Lydian', mix: 'Mixolydian', loc: 'Locrian', arm: 'Harmonic minor', hij: 'Hijaz', hir: 'Hirajoshi',
 };
 const ROOTS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
