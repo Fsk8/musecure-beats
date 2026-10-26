@@ -262,15 +262,27 @@ export default function App() {
     }
   }
 
-  /** Archivos para registrar: una vuelta en WAV y el proyecto en JSON. */
-  async function buildRegisterFiles({ asRemix = false } = {}) {
+  /**
+   * Archivos para registrar: el WAV (las vueltas que elija la persona) y el proyecto en JSON.
+   * La huella de MuSecure se calcula siempre sobre UNA vuelta, para que el mismo beat dé la misma
+   * huella sin importar cuántas vueltas tenga el WAV.
+   */
+  async function buildRegisterFiles({ asRemix = false, loops = 1 } = {}) {
     if (engine.playing) { engine.stop(); setPlaying(false); }
     setRecording(true);
     try {
-      const buffer = await engine.renderOffline(1, setRecProgress);
+      const buffer = await engine.renderOffline(loops, setRecProgress);
       if (!buffer) throw new Error('Render cancelled');
+      const wav = audioBufferToWav(buffer);
+      let fingerprintWav = wav;
+      if (loops > 1) {
+        const one = await engine.renderOffline(1, () => {});
+        if (!one) throw new Error('Render cancelled');
+        fingerprintWav = audioBufferToWav(one);
+      }
       return {
-        wav: audioBufferToWav(buffer),
+        wav,
+        fingerprintWav,
         // Si se registra como obra original, el proyecto publicado no lleva el vínculo de remix.
         project: new Blob([projectFile(asRemix ? S : { ...S, remixOf: null })], { type: 'application/json' }),
         baseName: fileSafeName(S.title),
@@ -378,7 +390,7 @@ export default function App() {
       />
       </div>
       <div hidden={drawer !== 'register'}>
-      <RegisterPanel title={S.title} buildFiles={buildRegisterFiles} remixOf={S.remixOf} beat={S} onRegistered={clearRemix} />
+      <RegisterPanel title={S.title} loopSec={loopSeconds(S)} buildFiles={buildRegisterFiles} remixOf={S.remixOf} beat={S} onRegistered={clearRemix} />
       </div>
       <div hidden={drawer !== 'battles'}>
         {drawer === 'battles' && <Battles onOpenProject={openFromGallery} />}

@@ -1,3 +1,4 @@
+import { TAIL_SECONDS } from '../audio/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { Panel } from './Panel';
 import { useNear } from '../near/NearProvider';
@@ -47,7 +48,12 @@ function useParentProject(cid) {
   return state;
 }
 
-export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, onRegistered }) {
+// Las funciones de Vercel aceptan hasta 4,5 MB: el WAV (estéreo, 16 bits) no puede pasar de 4 MB.
+const MAX_WAV_BYTES = 4 * 1024 * 1024;
+const LOOP_OPTIONS = [1, 2, 4];
+const wavBytes = (loopSec, loops) => Math.ceil((loopSec * loops + TAIL_SECONDS) * 48000 * 4) + 44; // 48 kHz: el peor caso común
+
+export function RegisterPanel({ title, loopSec = 8, buildFiles, remixOf: linkedRemix, beat, onRegistered }) {
   const parent = useParentProject(linkedRemix?.project_cid);
   const similarity = useMemo(
     () => (parent.project && beat ? remixSimilarity(parent.project, beat) : null),
@@ -56,6 +62,9 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
   // Por debajo del umbral se puede registrar como obra original. Sin medición posible, sigue siendo remix.
   const canDetach = Boolean(similarity && similarity.overall < REMIX_MIN_SIMILARITY);
   const [asOriginal, setAsOriginal] = useState(false);
+  const [regLoops, setRegLoops] = useState(1);
+  const fits = (n) => wavBytes(loopSec, n) <= MAX_WAV_BYTES;
+  useEffect(() => { if (!fits(regLoops)) setRegLoops(1); }, [loopSec]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!canDetach) setAsOriginal(false); }, [canDetach]);
   const remixOf = linkedRemix && !(canDetach && asOriginal) ? linkedRemix : null;
 
@@ -129,8 +138,11 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
       const license_uri = licenseUri.trim() || null;
       if (license_uri && /["\\]/.test(license_uri)) throw new Error('The license link cannot contain quotes');
 
-      setStep('Rendering one loop of the beat…');
-      const { wav, project, baseName, art } = await buildFiles({ asRemix: Boolean(remixOf) });
+      setStep(regLoops === 1 ? 'Rendering one loop of the beat…' : `Rendering ${regLoops} loops of the beat…`);
+      const { wav, fingerprintWav, project, baseName, art } = await buildFiles({ asRemix: Boolean(remixOf), loops: regLoops });
+      if (wav.size > MAX_WAV_BYTES) {
+        throw new Error(`The WAV is ${(wav.size / 1048576).toFixed(1)} MB; the limit is 4 MB. Choose fewer loops.`);
+      }
 
       setStep('Computing SHA-256 hashes…');
       const [audio_hash, project_hash] = await Promise.all([sha256Hex(wav), sha256Hex(project)]);
@@ -139,7 +151,7 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
       // Si falla (por ejemplo, no carga FFmpeg), el registro sigue sin ella.
       let musecure_fingerprint = null;
       try {
-        const fp = await generateFingerprint(new File([wav], `${baseName}.wav`, { type: 'audio/wav' }),
+        const fp = await generateFingerprint(new File([fingerprintWav || wav], `${baseName}.wav`, { type: 'audio/wav' }),
           (stage, pct) => setStep(`Audio fingerprint: ${stage} ${Math.round(pct)}%`));
         musecure_fingerprint = fp.sha256;
       } catch (e) {
@@ -312,6 +324,16 @@ export function RegisterPanel({ title, buildFiles, remixOf: linkedRemix, beat, o
           <p className="hint">0 = free remix / no non-exclusive licenses for sale. You can change it later as the owner.</p>
 
           <div className="bar">
+            <label htmlFor="reg-loops">Audio length
+              <select id="reg-loops" value={regLoops} disabled={busy} onChange={(e) => setRegLoops(+e.target.value)}>
+                {LOOP_OPTIONS.map((n) => (
+                  <option key={n} value={n} disabled={!fits(n)}>
+                    {n} {n === 1 ? 'loop' : 'loops'} · {Math.round(loopSec * n + TAIL_SECONDS)} s{fits(n) ? '' : ' (over 4 MB)'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="hint">The gallery plays it on repeat. The MuSecure fingerprint always uses the first loop, so the same beat keeps the same fingerprint.</p>
             <button className="primary" onClick={submit} disabled={busy}>
               {busy ? step : 'Register beat'}
             </button>
