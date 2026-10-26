@@ -26,6 +26,9 @@ import { Hero } from './components/Hero';
 import { RoyaltyTree } from './components/RoyaltyTree';
 import { RegisterPanel } from './components/RegisterPanel';
 
+// Paneles de exploración: más anchos y por encima del estudio.
+const WIDE = new Set(['gallery', 'battles', 'tree']);
+
 export default function App() {
   const [S, mutate, replaceState] = useBeatState();
   const octKey = S.oct.join(',');
@@ -321,7 +324,7 @@ export default function App() {
 
   return (
     <>
-    <div className={`wrap${drawer ? ' with-drawer' : ''}`}>
+    <div className={`wrap${drawer && !WIDE.has(drawer) ? ' with-drawer' : ''}`}>
       <header>
         <div className="brand">
           <h1>MuSecure <span>Beats</span></h1>
@@ -411,7 +414,7 @@ export default function App() {
       </p>
     </div>
 
-    <Drawer open={Boolean(drawer)} title={drawerTitles[drawer] || ''} onClose={closeDrawer}>
+    <Drawer open={Boolean(drawer)} wide={WIDE.has(drawer)} title={drawerTitles[drawer] || ''} onClose={closeDrawer}>
       <div hidden={drawer !== 'save'}>
       <SavePanel
         title={S.title}

@@ -323,3 +323,23 @@ button.accent{border-color:var(--accent);color:var(--accent-text);font-weight:60
 .block{display:block}
 .theme-toggle{min-width:0}
 .hero-show{align-self:flex-start}
+
+/* ---------- Fase B: panel ancho para explorar + tarjetas compactas */
+.drawer.wide{width:min(920px,100%)}
+@media (min-width:1280px){.drawer-backdrop.wide.show{display:block;opacity:1;pointer-events:auto}}
+.drawer-back{display:none}
+@media (max-width:640px){.drawer-back{display:inline-block}.drawer-head strong{flex:1;text-align:center}}
+.drawer.wide .beat-list{grid-template-columns:repeat(auto-fill,minmax(400px,1fr))}
+@media (max-width:640px){.drawer.wide .beat-list{grid-template-columns:1fr}}
+/* Portada a la izquierda, información a la derecha */
+.drawer.wide .beat-card{grid-template-columns:132px minmax(0,1fr);column-gap:14px;align-content:start}
+.drawer.wide .beat-card>*{grid-column:2}
+.drawer.wide .beat-card>.cover{grid-column:1;grid-row:1 / span 6;border-radius:10px}
+@media (max-width:520px){
+  .drawer.wide .beat-card{grid-template-columns:88px minmax(0,1fr)}
+}
+/* Las tarjetas de batalla tienen más contenido: portada un poco más grande */
+.drawer.wide article.beat-card{grid-template-columns:168px minmax(0,1fr)}
+@media (max-width:520px){.drawer.wide article.beat-card{grid-template-columns:96px minmax(0,1fr)}}
+.drawer.wide .tree-scroll{max-height:640px}
+.drawer :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
