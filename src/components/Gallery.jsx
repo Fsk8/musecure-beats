@@ -602,6 +602,9 @@ function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged, onRenderStems, 
         {b.owner_id !== b.creator && <span>Owner: <Account id={b.owner_id} /></span>}
         {b.parent_id && <span>Remix of #{b.parent_id}</span>}
         {b.remix_count > 0 && <span>{b.remix_count} remix{b.remix_count > 1 ? 'es' : ''}</span>}
+        {(b.remix_count > 0 || b.parent_id) && (
+          <button className="link" onClick={() => window.dispatchEvent(new CustomEvent('msb:open-tree', { detail: b.token_id }))}>🌳 Royalty tree</button>
+        )}
         <span>{new Date(Number(b.created_at_ms)).toLocaleDateString()}</span>
       </div>
       <div className="bar">

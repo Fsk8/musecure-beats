@@ -21,6 +21,8 @@ import { Gallery } from './components/Gallery';
 import { Drawer } from './components/Drawer';
 import { Earnings } from './components/Earnings';
 import { Battles } from './components/Battles';
+import { Guide } from './components/Guide';
+import { RoyaltyTree } from './components/RoyaltyTree';
 import { RegisterPanel } from './components/RegisterPanel';
 
 export default function App() {
@@ -44,10 +46,17 @@ export default function App() {
   const toggleDrawer = (id) => setDrawer((d) => (d === id ? null : id));
   // Botones como "Registrar beat" piden abrir un panel con este evento.
   useEffect(() => {
-    const onOpen = (e) => { if (['save', 'register', 'gallery', 'earnings', 'battles'].includes(e.detail)) setDrawer(e.detail); };
+    const onOpen = (e) => { if (['save', 'register', 'gallery', 'earnings', 'battles', 'tree', 'guide'].includes(e.detail)) setDrawer(e.detail); };
+    const onTree = (e) => { setTreeRoot(e.detail); setDrawer('tree'); };
     window.addEventListener('msb:open-panel', onOpen);
-    return () => window.removeEventListener('msb:open-panel', onOpen);
+    window.addEventListener('msb:open-tree', onTree);
+    // Primera visita: abre la guía.
+    try {
+      if (!localStorage.getItem('msb-guide-seen')) { setDrawer('guide'); localStorage.setItem('msb-guide-seen', '1'); }
+    } catch { /* sin almacenamiento: no se abre sola */ }
+    return () => { window.removeEventListener('msb:open-panel', onOpen); window.removeEventListener('msb:open-tree', onTree); };
   }, []);
+  const [treeRoot, setTreeRoot] = useState(null);
   // Una vez registrado, el beat abierto pasa a ser el nuevo remix: se quita el vínculo pendiente.
   const clearRemix = () => mutate((d) => { d.remixOf = null; });
   /** Al registrar: avisa al tutorial (¿era remix? ¿de la semilla de una batalla?) y suelta el vínculo de remix. */
@@ -304,7 +313,7 @@ export default function App() {
 
   const subtitle = `${KITS[S.kit].name} · ${ROOTS[S.root][0]} ${SCALES[S.scale][0].toLowerCase()} · ${S.len} steps`;
 
-  const drawerTitles = { save: 'Save & export', register: 'Register on NEAR', gallery: 'Beats on NEAR', earnings: 'My earnings', battles: 'Remix Battles' };
+  const drawerTitles = { save: 'Save & export', register: 'Register on NEAR', gallery: 'Beats on NEAR', earnings: 'My earnings', battles: 'Remix Battles', tree: 'Royalty tree', guide: 'How it works' };
 
   return (
     <>
@@ -326,12 +335,14 @@ export default function App() {
 
       <nav className="side-nav" aria-label="Panels">
         <button onClick={newBeat}>+ New beat</button>
+        <button aria-pressed={drawer === 'guide'} onClick={() => toggleDrawer('guide')}>❓ How it works</button>
         <button aria-pressed={drawer === 'save'} onClick={() => toggleDrawer('save')}>Save & export</button>
         <button aria-pressed={drawer === 'register'} onClick={() => toggleDrawer('register')}>
           Register on NEAR{S.remixOf ? ` · remix of #${S.remixOf.token_id}` : ''}
         </button>
         <button aria-pressed={drawer === 'gallery'} onClick={() => toggleDrawer('gallery')}>Gallery</button>
         <button aria-pressed={drawer === 'battles'} onClick={() => toggleDrawer('battles')}>Battles</button>
+        <button aria-pressed={drawer === 'tree'} onClick={() => toggleDrawer('tree')}>Royalty tree</button>
         <button aria-pressed={drawer === 'earnings'} onClick={() => toggleDrawer('earnings')}>My earnings</button>
       </nav>
 
@@ -404,6 +415,12 @@ export default function App() {
       </div>
       <div hidden={drawer !== 'register'}>
       <RegisterPanel title={S.title} onTitle={(v) => mutate((d) => { d.title = v; })} loopSec={loopSeconds(S)} buildFiles={buildRegisterFiles} remixOf={S.remixOf} beat={S} onRegistered={onRegistered} />
+      </div>
+      <div hidden={drawer !== 'guide'}>
+        {drawer === 'guide' && <Guide />}
+      </div>
+      <div hidden={drawer !== 'tree'}>
+        {drawer === 'tree' && <RoyaltyTree initialRoot={treeRoot} />}
       </div>
       <div hidden={drawer !== 'battles'}>
         {drawer === 'battles' && <Battles onOpenProject={openFromGallery} />}
