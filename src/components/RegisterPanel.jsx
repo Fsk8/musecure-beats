@@ -10,6 +10,7 @@ import { fetchIpfs } from '../near/ipfs';
 import { collectEmails, nearToYocto, registerBeat, resolveEmails, sha256Hex, toCredits, uploadToIpfs } from '../near/register';
 import { generateFingerprint } from '../fingerprint';
 import { SEALED_PLACEHOLDER, sealProject } from '../near/seal';
+import { AccountGate, confirmPay } from './AccountGate';
 
 const emptyRow = () => ({ account: '', pct: '' });
 
@@ -68,7 +69,7 @@ export function RegisterPanel({ title, onTitle, loopSec = 8, buildFiles, remixOf
   useEffect(() => { if (!canDetach) setAsOriginal(false); }, [canDetach]);
   const remixOf = linkedRemix && !(canDetach && asOriginal) ? linkedRemix : null;
 
-  const { status, account, accountId, balance, login, refresh, activate, activationError, getAccessToken } = useNear();
+  const { status, account, accountId, balance, refresh, getAccessToken } = useNear();
   const [mode, setMode] = useState('whole');
   const [whole, setWhole] = useState([]);
   const [tracks, setTracks] = useState(TRACKS.map(() => ({ weight: 25, rows: [] })));
@@ -165,6 +166,11 @@ export function RegisterPanel({ title, onTitle, loopSec = 8, buildFiles, remixOf
         sealed ? Promise.resolve(SEALED_PLACEHOLDER) : uploadToIpfs(project, `${baseName}.musecure.json`),
       ]);
 
+      if (remixOf && remixOf.remix_price !== '0'
+        && !confirmPay(yoctoToNear(remixOf.remix_price), `Register as a remix of "${remixOf.title}" and pay its remix license`,
+          'Half goes to the original\'s owner, half to its authors. The original also receives 20 % of what your remix\'s authors earn.')) {
+        throw new Error('Registration cancelled: nothing was paid.');
+      }
       setStep('Signing on NEAR…');
       const beat = await registerBeat(account, {
         title: cleanTitle,
@@ -192,23 +198,16 @@ export function RegisterPanel({ title, onTitle, loopSec = 8, buildFiles, remixOf
   }
 
   const summary = result ? `Registered: #${result.token_id}`
-    : status !== 'active' ? 'Sign-in required'
+    : status === 'signed-out' ? 'Sign-in required'
+      : status === 'inactive' ? 'Activate your account'
+        : status !== 'active' ? 'Setting up your account…'
       : remixOf ? `Remix of #${remixOf.token_id}` : 'Ready to register';
 
   return (
     <Panel plain id="register" title="Register on NEAR" defaultOpen={false} summary={summary}>
-      {status === 'no-auth' && <p className="hint">Set VITE_PRIVY_APP_ID to sign in and register.</p>}
-      {status === 'signed-out' && (
+      {status !== 'active' && (
         <div className="bar">
-          <p className="hint">Sign in to register your beat under your name.</p>
-          <button className="primary" onClick={login}>Sign in with email</button>
-        </div>
-      )}
-      {status === 'activating' && <p className="hint">Activating your NEAR account ({shortAccount(accountId)})…</p>}
-      {status === 'inactive' && (
-        <div className="bar">
-          <p className="hint">Your NEAR account ({shortAccount(accountId)}) is not active yet.{activationError ? ` ${activationError}` : ''}</p>
-          <button className="primary" onClick={activate}>Activate account</button>
+          <AccountGate what="register your beat as an NFT" />
         </div>
       )}
 
@@ -341,8 +340,9 @@ export function RegisterPanel({ title, onTitle, loopSec = 8, buildFiles, remixOf
               </select>
             </label>
             <p className="hint">The gallery plays it on repeat. The MuSecure fingerprint always uses the first loop, so the same beat keeps the same fingerprint.</p>
-            <button className="primary" onClick={submit} disabled={busy}>
-              {busy ? step : 'Register beat'}
+            <button className="primary" onClick={submit} disabled={busy || Boolean(result)}>
+              {busy ? step : result ? `Registered as #${result.token_id} ✓` : remixOf && remixOf.remix_price !== '0'
+                ? `Register beat · pay ${yoctoToNear(remixOf.remix_price)} NEAR remix license` : 'Register beat'}
             </button>
           </div>
         </>
@@ -370,6 +370,10 @@ export function RegisterPanel({ title, onTitle, loopSec = 8, buildFiles, remixOf
           {result.musecure_fingerprint && (
             <span className="hint">MuSecure fingerprint: {result.musecure_fingerprint.slice(0, 16)}…</span>
           )}
+          <div className="bar">
+            <button className="mini" onClick={() => window.dispatchEvent(new CustomEvent('msb:open-panel', { detail: 'gallery' }))}>See it in the Gallery →</button>
+            <button className="mini" onClick={() => { setResult(null); setWarning(''); }}>Register another beat</button>
+          </div>
         </div>
       )}
     </Panel>

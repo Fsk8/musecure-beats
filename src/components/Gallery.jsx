@@ -9,6 +9,7 @@ import { licenseCertificateSvg } from '../near/certificate';
 import { isSealed, openSealedProject } from '../near/seal';
 import { downloadBlob } from '../io/files';
 import { midiBlob } from '../music/midi';
+import { AccountGate, confirmPay } from './AccountGate';
 import { fileSafeName, parseProjectFile } from '../music/patterns';
 import { MONAD_EXPLORER, anchorInMusecure, beatAccountStatus } from '../near/musecure';
 
@@ -232,8 +233,7 @@ function LeaseBox({ beat: b, onChanged, onRenderStems }) {
   let action;
   if (owned) action = <span className="ok-text">✓ You hold a non-exclusive license for this beat</span>;
   else if (isOwner) action = null;
-  else if (status === 'signed-out') action = <button onClick={login}>Sign in to buy the license ({price} Ⓝ)</button>;
-  else if (status !== 'active') action = <span className="hint">Activate your account to buy the license.</span>;
+  else if (status !== 'active') action = <AccountGate what={`buy the license (${price} NEAR)`} />;
   else action = <button className="primary" onClick={buy} disabled={busy}>{busy ? 'Buying…' : `Buy non-exclusive license · ${price} Ⓝ`}</button>;
 
   return (
@@ -321,7 +321,7 @@ function SupportBox({ beat: b, onChanged }) {
   const [amount, setAmount] = useState('0.1');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
-  if (status !== 'active') return <p className="hint">Sign in to support this beat.</p>;
+  if (status !== 'active') return <AccountGate what="support this beat" />;
 
   async function support() {
     setMsg(null);
@@ -329,6 +329,7 @@ function SupportBox({ beat: b, onChanged }) {
       const yocto = nearToYocto(amount);
       if (yocto === '0') throw new Error('Enter how much NEAR to send');
       if (balance !== null && Number(amount.replace(',', '.')) + 0.01 > balance) throw new Error(`Not enough balance (${balance.toFixed(3)} Ⓝ)`);
+      if (!confirmPay(amount, `Support "${b.title}"`, 'Half goes to the NFT owner, half stays inside the NFT for its authors.')) return;
       setBusy(true);
       const tx = await payContract(account, 'support', { token_id: b.token_id }, yocto);
       setMsg({ ok: true, tx });
@@ -456,8 +457,7 @@ function BuyBox({ beat: b, onChanged }) {
 
   let action;
   if (accountId && accountId === b.owner_id) action = <span className="hint">Your NFT is listed for {price} Ⓝ.</span>;
-  else if (status === 'signed-out') action = <button onClick={login}>Sign in to buy the NFT ({price} Ⓝ)</button>;
-  else if (status !== 'active') action = <span className="hint">Activate your account to buy the NFT.</span>;
+  else if (status !== 'active') action = <AccountGate what={`buy the NFT (${price} NEAR)`} />;
   else action = <button className="primary" onClick={buy} disabled={busy}>{busy ? 'Buying…' : `Buy NFT (exclusive) · ${price} Ⓝ`}</button>;
 
   return (

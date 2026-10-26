@@ -4,6 +4,7 @@ import { useNear } from '../near/NearProvider';
 import { getAllBeats, getOwnerEarnings, yoctoToNear } from '../near/contract';
 import { CONTRACT_ID, explorerAccountUrl, explorerTxUrl } from '../near/config';
 import { payContract } from '../near/register';
+import { AccountGate } from './AccountGate';
 
 const BPS = 10000n;
 const big = (v) => BigInt(v || 0);
@@ -101,7 +102,7 @@ export function Earnings() {
   }
 
   if (status !== 'active') {
-    return <Panel plain id="earnings" title="My earnings"><p className="hint">Sign in to see your earnings.</p></Panel>;
+    return <Panel plain id="earnings" title="My earnings"><AccountGate what="see and withdraw your earnings" /></Panel>;
   }
 
   return (

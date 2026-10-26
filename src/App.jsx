@@ -22,6 +22,7 @@ import { Drawer } from './components/Drawer';
 import { Earnings } from './components/Earnings';
 import { Battles } from './components/Battles';
 import { Guide } from './components/Guide';
+import { Hero } from './components/Hero';
 import { RoyaltyTree } from './components/RoyaltyTree';
 import { RegisterPanel } from './components/RegisterPanel';
 
@@ -50,10 +51,6 @@ export default function App() {
     const onTree = (e) => { setTreeRoot(e.detail); setDrawer('tree'); };
     window.addEventListener('msb:open-panel', onOpen);
     window.addEventListener('msb:open-tree', onTree);
-    // Primera visita: abre la guía.
-    try {
-      if (!localStorage.getItem('msb-guide-seen')) { setDrawer('guide'); localStorage.setItem('msb-guide-seen', '1'); }
-    } catch { /* sin almacenamiento: no se abre sola */ }
     return () => { window.removeEventListener('msb:open-panel', onOpen); window.removeEventListener('msb:open-tree', onTree); };
   }, []);
   const [treeRoot, setTreeRoot] = useState(null);
@@ -313,7 +310,7 @@ export default function App() {
 
   const subtitle = `${KITS[S.kit].name} · ${ROOTS[S.root][0]} ${SCALES[S.scale][0].toLowerCase()} · ${S.len} steps`;
 
-  const drawerTitles = { save: 'Save & export', register: 'Register on NEAR', gallery: 'Beats on NEAR', earnings: 'My earnings', battles: 'Remix Battles', tree: 'Royalty tree', guide: 'How it works' };
+  const drawerTitles = { save: 'Save & export', register: 'Register on NEAR', gallery: 'Gallery', earnings: 'My earnings', battles: 'Battles', tree: 'Royalty tree', guide: 'How it works' };
 
   return (
     <>
@@ -323,7 +320,10 @@ export default function App() {
           <h1>MuSecure <span>Beats</span></h1>
           <div className="sub"><strong>{S.title || 'Untitled'}</strong> · {subtitle}</div>
         </div>
-        <AccountBar />
+        <div className="header-right">
+          <button className="mini help" aria-pressed={drawer === 'guide'} onClick={() => toggleDrawer('guide')}>❓ How it works</button>
+          <AccountBar />
+        </div>
       </header>
 
       {S.remixOf && (
@@ -334,17 +334,27 @@ export default function App() {
       )}
 
       <nav className="side-nav" aria-label="Panels">
-        <button onClick={newBeat}>+ New beat</button>
-        <button aria-pressed={drawer === 'guide'} onClick={() => toggleDrawer('guide')}>❓ How it works</button>
-        <button aria-pressed={drawer === 'save'} onClick={() => toggleDrawer('save')}>Save & export</button>
-        <button aria-pressed={drawer === 'register'} onClick={() => toggleDrawer('register')}>
-          Register on NEAR{S.remixOf ? ` · remix of #${S.remixOf.token_id}` : ''}
-        </button>
-        <button aria-pressed={drawer === 'gallery'} onClick={() => toggleDrawer('gallery')}>Gallery</button>
-        <button aria-pressed={drawer === 'battles'} onClick={() => toggleDrawer('battles')}>Battles</button>
-        <button aria-pressed={drawer === 'tree'} onClick={() => toggleDrawer('tree')}>Royalty tree</button>
-        <button aria-pressed={drawer === 'earnings'} onClick={() => toggleDrawer('earnings')}>My earnings</button>
+        <div className="nav-group" aria-label="Studio">
+          <span className="nav-label">Studio</span>
+          <button onClick={newBeat}>+ New beat</button>
+          <button aria-pressed={drawer === 'save'} onClick={() => toggleDrawer('save')}>Save & export</button>
+        </div>
+        <div className="nav-group" aria-label="Own it">
+          <span className="nav-label">Own it</span>
+          <button className="primary" aria-pressed={drawer === 'register'} onClick={() => toggleDrawer('register')}>
+            Register on NEAR{S.remixOf ? ` · remix of #${S.remixOf.token_id}` : ''}
+          </button>
+          <button aria-pressed={drawer === 'earnings'} onClick={() => toggleDrawer('earnings')}>My earnings</button>
+        </div>
+        <div className="nav-group" aria-label="Explore">
+          <span className="nav-label">Explore</span>
+          <button className="accent" aria-pressed={drawer === 'gallery'} onClick={() => toggleDrawer('gallery')}>Gallery</button>
+          <button className="accent" aria-pressed={drawer === 'battles'} onClick={() => toggleDrawer('battles')}>⚔️ Battles</button>
+          <button className="accent" aria-pressed={drawer === 'tree'} onClick={() => toggleDrawer('tree')}>🌳 Royalty tree</button>
+        </div>
       </nav>
+
+      <Hero playing={playing} onPlay={togglePlay} onTour={() => setDrawer('guide')} onOpen={setDrawer} />
 
       <Transport
         S={S}

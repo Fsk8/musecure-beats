@@ -101,9 +101,22 @@ export function Guide() {
           and can win battles. Read slowly. Or just press play.
         </Bubble>
       </div>
+      <div className="tour">
+        <span className="label">The 1-minute tour</span>
+        <ol>
+          <li><strong>Play.</strong> Press ▶ Play and click a few cells. Everything stays in key. <em>No account needed.</em></li>
+          <li><strong>Own it.</strong> Sign in with your email and press <em>Register on NEAR</em>: your beat becomes an NFT that collects licenses and remix fees for you.</li>
+          <li><strong>Play the game.</strong> Open <em>Battles</em>, remix this week's beat, and let The Monk judge it. Winners get paid by the contract.</li>
+        </ol>
+        <div className="bar">
+          <button className="mini" onClick={() => open('battles')}>Open Battles →</button>
+          <button className="mini" onClick={() => open('tree')}>See the royalty tree →</button>
+        </div>
+      </div>
+      <span className="label">Details</span>
       <div className="guide">
-        {SECTIONS.map((s, i) => (
-          <details key={s.id} className="guide-section" open={i === 0}>
+        {SECTIONS.map((s) => (
+          <details key={s.id} className="guide-section">
             <summary><span aria-hidden="true">{s.icon}</span> {s.title}</summary>
             <ol>
               {s.steps.map((t) => <li key={t}>{t}</li>)}

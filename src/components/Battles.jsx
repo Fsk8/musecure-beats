@@ -5,6 +5,7 @@ import { useNear } from '../near/NearProvider';
 import { yoctoToNear } from '../near/contract';
 import { CONTRACT_ID, explorerAccountUrl, explorerTxUrl, shortAccount } from '../near/config';
 import { nearToYocto, payContract } from '../near/register';
+import { AccountGate, confirmPay } from './AccountGate';
 import { fetchIpfs, ipfsUrl } from '../near/ipfs';
 import {
   Bubble, MONK_LINES, Monk, canSpeak, fallbackMantra, pickLine, setVoiceEnabled, speak, stopSpeaking, useTypewriter,
@@ -267,23 +268,24 @@ function Reviews({ battle, beats, report, error }) {
 }
 
 function FundBox({ battle, onChanged }) {
-  const { status, account, login } = useNear();
+  const { status, account } = useNear();
   const [amount, setAmount] = useState('0.5');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  if (status === 'signed-out') {
-    return <button className="mini" onClick={login}>Sign in to fund the prize</button>;
-  }
-  if (status !== 'active') return <p className="hint">Activate your NEAR account to fund the prize.</p>;
+  if (status !== 'active') return <AccountGate what="add NEAR to the prize" />;
   async function fund() {
-    setBusy(true);
     setMsg('');
+    let yocto;
+    try { yocto = nearToYocto(amount); } catch (e) { setMsg(<span className="warn-text">{e.message}</span>); return; }
+    if (yocto === '0') { setMsg(<span className="warn-text">Enter how much NEAR to add.</span>); return; }
+    if (!confirmPay(amount, `Add to the prize of ${battle.title}`, 'It goes to the winners (50 / 30 / 20 %) when The Monk settles the battle.')) return;
+    setBusy(true);
     try {
-      const tx = await payContract(account, 'fund_battle', { battle_id: battle.id }, nearToYocto(amount));
-      setMsg(<>Thanks! <a href={explorerTxUrl(tx)} target="_blank" rel="noreferrer">View transaction</a></>);
+      const tx = await payContract(account, 'fund_battle', { battle_id: battle.id }, yocto);
+      setMsg(<span className="ok-text">Thanks! <a href={explorerTxUrl(tx)} target="_blank" rel="noreferrer">View transaction</a></span>);
       onChanged();
     } catch (e) {
-      setMsg(e.message);
+      setMsg(<span className="warn-text">{e.message}</span>);
     } finally {
       setBusy(false);
     }
@@ -291,7 +293,7 @@ function FundBox({ battle, onChanged }) {
   return (
     <div className="bar">
       <input type="number" min="0.01" step="0.1" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="NEAR to add" style={{ width: '6em' }} />
-      <button className="mini" onClick={fund} disabled={busy}>{busy ? 'Funding…' : 'Add to prize'}</button>
+      <button className="mini" onClick={fund} disabled={busy}>{busy ? 'Funding…' : `Add ${amount || 0} NEAR to the prize`}</button>
       {msg && <span className="hint">{msg}</span>}
     </div>
   );
@@ -347,10 +349,14 @@ function BattleCard({ battle, now, onRemix, onChanged }) {
         {seed && seed.remix_price !== '0' && <> · remix license {near(seed.remix_price)}</>}
       </p>
       {battle.rules && <p><strong>Rules:</strong> {battle.rules}</p>}
-      <div className="stats">
+      <div className="stats three">
         <div className="stat"><span className="label">Prize pool</span><strong>{near(battle.pool)}</strong></div>
         <div className="stat"><span className="label">Entries</span><strong>{battle.entry_count}</strong></div>
-        <div className="stat"><span className="label">Split</span><strong>50 · 30 · 20 %</strong></div>
+        <div className="stat"><span className="label">Prizes</span>
+          <strong className="split">
+            {[5n, 3n, 2n].map((w, k) => <span key={k}>{['1st', '2nd', '3rd'][k]} {yoctoToNear((BigInt(battle.pool) * w) / 10n, 2)}</span>)}
+          </strong>
+        </div>
       </div>
 
       {p === 'open' && seed && (

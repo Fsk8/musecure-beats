@@ -62,7 +62,7 @@ function Edge({ child, parent, id }) {
       <path id={id} d={d} fill="none" className={`tree-edge${earned > 0n ? ' live' : ''}`} strokeWidth={width} />
       {Array.from({ length: coins }, (_, k) => (
         <circle key={k} r="4.5" className="tree-coin">
-          <animateMotion dur={`${2.6 - coins * 0.2}s`} repeatCount="indefinite" begin={`${(k * 2.6) / Math.max(coins, 1)}s`}>
+          <animateMotion dur={`${2.6 - coins * 0.2}s`} repeatCount="indefinite" begin={`-${((k * (2.6 - coins * 0.2)) / Math.max(coins, 1)).toFixed(2)}s`}>
             <mpath href={`#${id}`} />
           </animateMotion>
         </circle>
@@ -164,7 +164,8 @@ export function RoyaltyTree({ initialRoot = null }) {
             <div className="stat"><span className="label">Seed earned</span><strong>{near(tree.beat.total_earned)}</strong></div>
           </div>
           <div className="tree-scroll">
-            <svg width={view.width + 8} height={view.height} viewBox={`-4 -4 ${view.width + 8} ${view.height}`} className="tree-svg">
+            <svg viewBox={`-4 -4 ${view.width + 8} ${view.height}`} className="tree-svg"
+              style={{ width: '100%', minWidth: Math.min(view.width + 8, 360), maxWidth: view.width + 8 }}>
               {view.nodes.filter((n) => n.depth > 0).map((n) => (
                 <Edge key={`e${n.beat.token_id}`} id={`edge-${n.beat.token_id}`} child={n} parent={byNode.get(n.beat.parent_id)} />
               ))}
