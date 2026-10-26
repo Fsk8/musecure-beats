@@ -195,3 +195,59 @@ button.mini{padding:2px 6px;font-size:11px}
 .cover{width:100%;aspect-ratio:1;border-radius:12px;display:block}
 .badges{display:flex;flex-wrap:wrap;gap:4px}
 .owner-box{display:grid;gap:6px;border:1px dashed var(--line);border-radius:10px;padding:10px}
+
+/* ---------- The Monk (crítico de las Remix Battles) */
+.monk{display:block;overflow:visible}
+.monk-aura{fill:#7a3cff;opacity:.07;transition:opacity .4s}
+.monk-glow .monk-aura{opacity:.28;animation:monk-pulse 1.2s ease-in-out infinite}
+.monk-float{animation:monk-float 4s ease-in-out infinite;transform-origin:100px 180px}
+.monk-head{transform-origin:100px 100px;transform-box:view-box}
+.monk-listening .monk-head{animation:monk-nod var(--beat) ease-in-out infinite}
+.monk-pleased .monk-head{animation:monk-nod calc(var(--beat) * 2) ease-in-out infinite}
+.monk-surprised .monk-head{animation:monk-jolt .35s ease-out 1}
+.monk-beard{transform-origin:100px 86px;transform-box:view-box;animation:monk-sway 3s ease-in-out infinite}
+.monk-listening .monk-beard{animation-duration:var(--beat)}
+.monk-eyes{stroke:#7ef0c1}
+.monk-eyes path{stroke:#7ef0c1}
+.monk-eyes-open circle{fill:#7ef0c1;filter:drop-shadow(0 0 4px #7ef0c1)}
+.monk-fader{fill:#eceef7;transition:x .8s cubic-bezier(.3,1.4,.5,1)}
+.monk-fader-trail{fill:#7ef0c1;transition:width .8s cubic-bezier(.3,1.4,.5,1)}
+.monk-glow .monk-fader,.monk-glow .monk-fader-trail{fill:#ffcf4a;filter:drop-shadow(0 0 5px #ffcf4a)}
+.monk-led{fill:#454b6a}
+.monk-listening .monk-led{fill:#ff6e57;animation:monk-blink var(--beat) steps(2) infinite}
+.monk-notes text{animation:monk-note 2.4s ease-in infinite;opacity:0}
+.monk-notes text:nth-child(2){animation-delay:1.2s}
+@keyframes monk-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes monk-nod{0%,100%{transform:rotate(0)}25%{transform:rotate(-4deg) translateY(2px)}75%{transform:rotate(4deg) translateY(2px)}}
+@keyframes monk-sway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
+@keyframes monk-jolt{0%{transform:translateY(0)}40%{transform:translateY(-8px)}100%{transform:translateY(0)}}
+@keyframes monk-pulse{0%,100%{opacity:.18}50%{opacity:.34}}
+@keyframes monk-blink{50%{opacity:.2}}
+@keyframes monk-note{0%{opacity:0;transform:translateY(0)}20%{opacity:1}100%{opacity:0;transform:translateY(-30px)}}
+@media (prefers-reduced-motion:reduce){.monk *{animation:none!important}}
+
+.monk-host{display:flex;align-items:flex-end;gap:10px}
+.monk-bubble{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-size:13px;line-height:1.45;max-width:420px;box-shadow:0 2px 0 var(--line)}
+.monk-bubble::before{content:"";position:absolute;left:-7px;bottom:16px;width:12px;height:12px;background:var(--panel);border-left:1px solid var(--line);border-bottom:1px solid var(--line);transform:rotate(45deg)}
+.monk-bubble.small{font-size:12px;font-style:italic;color:var(--muted)}
+.monk-bubble .mantra{display:block;margin-top:6px;font-style:italic;color:var(--muted)}
+.verdict{border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:12px;background:linear-gradient(180deg,color-mix(in srgb,#7a3cff 10%,var(--panel)),var(--panel))}
+.verdict-stage{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.verdict-title{font-size:15px;font-weight:700}
+.verdict-score{font-size:28px;font-weight:800;letter-spacing:-.02em}
+.verdict-progress{display:flex;gap:4px}
+.verdict-progress span{height:4px;flex:1;border-radius:2px;background:var(--line)}
+.verdict-progress span.on{background:#7a3cff}
+.confetti{position:relative;height:0}
+.confetti i{position:absolute;top:-120px;width:7px;height:11px;border-radius:2px;animation:confetti 1.6s ease-in forwards;opacity:0}
+@keyframes confetti{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(180px) rotate(540deg)}}
+
+/* ---------- The Monk's Path (tutorial) */
+.path-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.path-list{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px}
+.path-item{display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:start;padding:8px;border:1px solid var(--line);border-radius:10px;font-size:13px}
+.path-item.current{border-color:#7a3cff;background:color-mix(in srgb,#7a3cff 7%,var(--panel))}
+.path-item.done{opacity:.7}
+.path-item.done strong{text-decoration:line-through;text-decoration-color:var(--muted)}
+.path-check{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff}
+.path-item.done .path-check{background:#34c895;border-color:#34c895}

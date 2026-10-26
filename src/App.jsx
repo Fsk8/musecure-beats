@@ -3,7 +3,7 @@ import { AudioEngine, loopSeconds } from './audio/engine';
 import { playhead } from './audio/playhead';
 import { KITS, ROOTS, SCALES, TRACKS, VEL, computeTheory } from './music/theory';
 import {
-  challengeDone, defaultState, emptyGrid, extendPattern, fileSafeName, nextCell, parseProjectFile, projectFile,
+  defaultState, emptyGrid, extendPattern, fileSafeName, nextCell, parseProjectFile, projectFile,
   beatArt, moveBar, quantizeTrack, randomTrack, rotateTrack,
 } from './music/patterns';
 import { audioBufferToWav, downloadBlob } from './io/files';
@@ -13,7 +13,7 @@ import { Transport, ConfirmRandomAll } from './components/Transport';
 import { SoundPanel } from './components/SoundPanel';
 import { Mixer } from './components/Mixer';
 import { TrackEditor } from './components/TrackEditor';
-import { Challenge } from './components/Challenge';
+import { MonkPath } from './components/MonkPath';
 import { SavePanel } from './components/SavePanel';
 import { AccountBar } from './components/AccountBar';
 import { Gallery } from './components/Gallery';
@@ -49,6 +49,13 @@ export default function App() {
   }, []);
   // Una vez registrado, el beat abierto pasa a ser el nuevo remix: se quita el vínculo pendiente.
   const clearRemix = () => mutate((d) => { d.remixOf = null; });
+  /** Al registrar: avisa al tutorial (¿era remix? ¿de la semilla de una batalla?) y suelta el vínculo de remix. */
+  const onRegistered = (beat) => {
+    let battleSeed = null;
+    try { battleSeed = sessionStorage.getItem('msb-battle-seed'); } catch { /* sin almacenamiento */ }
+    window.dispatchEvent(new CustomEvent('msb:registered', { detail: { beat, remixOf: S.remixOf, battleSeed } }));
+    clearRemix();
+  };
   // Preferencia del equipo, no del beat: por eso no va en el proyecto.
   const [lite, setLite] = useState(() => { try { return localStorage.getItem('msb-lite') === '1'; } catch { return false; } });
 
@@ -363,7 +370,7 @@ export default function App() {
         qMessage={qMessage}
       />
 
-      <Challenge done={challengeDone(S)} />
+      <MonkPath beat={S} />
 
 
       <p className="note">
@@ -390,7 +397,7 @@ export default function App() {
       />
       </div>
       <div hidden={drawer !== 'register'}>
-      <RegisterPanel title={S.title} loopSec={loopSeconds(S)} buildFiles={buildRegisterFiles} remixOf={S.remixOf} beat={S} onRegistered={clearRemix} />
+      <RegisterPanel title={S.title} loopSec={loopSeconds(S)} buildFiles={buildRegisterFiles} remixOf={S.remixOf} beat={S} onRegistered={onRegistered} />
       </div>
       <div hidden={drawer !== 'battles'}>
         {drawer === 'battles' && <Battles onOpenProject={openFromGallery} />}

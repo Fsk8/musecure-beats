@@ -123,11 +123,12 @@ export function features(seed, s) {
 
 // ---------- calificación
 
-const SYSTEM = `You are "The Critic", a demanding but fair music critic NPC in MuSecure Beats, a game where producers remix a weekly seed beat.
-You cannot hear audio: you receive objective features computed from each remix's sequencer project, plus the week's rules.
-Judge each remix on: (1) following the rules, (2) creativity — how much it transforms the seed while keeping its identity (kept_all_tracks_pct around 30-70% is the sweet spot; kept_melodic_pct must stay >= 30 for it to count as a remix), (3) groove and arrangement (density balance, syncopation, tempo), (4) coherence.
-Give every remix an integer score from 0 to 100 and a short review (2-3 sentences, witty, specific to the numbers, no emojis). Never give two remixes the same score unless they are truly identical.
-Answer ONLY with JSON: {"reviews":[{"token_id":"<id>","score":<0-100>,"review":"<text>"}]} with one entry per remix, in any order.`;
+const SYSTEM = `You are "The Monk", a robot music producer who has reached enlightenment through listening. You sit cross-legged, eyes closed, beard of tangled audio cables, one giant fader in your lap. You are the judge of MuSecure Beats Remix Battles, where producers remix a weekly seed beat.
+How you speak: calm, few words, zen and precise. Short sentences. Gentle but merciless honesty. You talk about space, breath, restraint and truth in sound. You may address the producer directly. Occasional dry humor. Never use emojis, hype words, or exclamation marks.
+You cannot hear audio: you receive objective features computed from each remix's sequencer project, plus the week's rules. Treat the numbers as what you "felt" while listening, and always ground your words in them.
+Judge each remix on: (1) following the rules, (2) creativity (kept_all_tracks_pct around 30-70% is the sweet spot; kept_melodic_pct must stay >= 30 for it to count as a remix), (3) groove and arrangement (density balance, syncopation, tempo, swing), (4) coherence.
+For each remix give an integer score from 0 to 100, a review (2-3 sentences, in your voice, specific to the numbers) and a mantra (one short line of advice, max 8 words). Never give two remixes the same score unless they are truly identical.
+Answer ONLY with JSON: {"reviews":[{"token_id":"<id>","score":<0-100>,"review":"<text>","mantra":"<text>"}]} with one entry per remix, in any order.`;
 
 function userPrompt(battle, seedFeatures, entries) {
   return JSON.stringify({
@@ -151,6 +152,7 @@ function mockReviews(entries) {
     return {
       token_id: e.token_id,
       score,
+      mantra: kept > 80 ? 'Let go of the seed.' : 'Remove one more thing.',
       review: `Test critic: keeps ${kept}% of the seed with ${f.syncopation_pct}% syncopation at ${f.bpm} BPM. ${kept > 80 ? 'Too close to the original.' : kept < 20 ? 'Barely recognizable as a remix.' : 'A healthy balance of respect and risk.'}`,
     };
   });
@@ -216,7 +218,7 @@ function normalize(reviews, entries) {
   return entries.map((e) => {
     const r = reviews.find((x) => String(x.token_id) === e.token_id) || {};
     const score = Math.max(0, Math.min(100, Math.round(Number(r.score) || 0)));
-    return { token_id: e.token_id, title: e.title, score, review: String(r.review || 'No review.').slice(0, 600) };
+    return { token_id: e.token_id, title: e.title, score, review: String(r.review || 'No review.').slice(0, 600), mantra: String(r.mantra || '').slice(0, 80) };
   });
 }
 
@@ -261,7 +263,7 @@ export async function judgeBattle(battle) {
     contract: BEATS_CONTRACT,
     battle_id: battle.id,
     battle: { title: battle.title, rules: battle.rules, seed_id: battle.seed_id },
-    critic: mode === 'nearai' ? { mode, provider: 'NEAR AI Cloud (private TEE inference)', model: NEARAI_MODEL } : { mode, note: mode === 'no-entries' ? 'No readable entries: nothing to judge' : 'Test critic (no NEAR AI key configured)' },
+    critic: mode === 'nearai' ? { mode, persona: 'The Monk', provider: 'NEAR AI Cloud (private TEE inference)', model: NEARAI_MODEL } : { mode, note: mode === 'no-entries' ? 'No readable entries: nothing to judge' : 'Test critic (no NEAR AI key configured)' },
     judged_at: new Date().toISOString(),
     reviews,
     attestation: raw.attestation || null,

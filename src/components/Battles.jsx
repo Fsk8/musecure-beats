@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Panel } from './Panel';
 import { Cover } from './Gallery';
 import { useNear } from '../near/NearProvider';
@@ -6,6 +6,7 @@ import { yoctoToNear } from '../near/contract';
 import { CONTRACT_ID, explorerAccountUrl, explorerTxUrl, shortAccount } from '../near/config';
 import { nearToYocto, payContract } from '../near/register';
 import { fetchIpfs, ipfsUrl } from '../near/ipfs';
+import { Bubble, MONK_LINES, Monk, fallbackMantra, pickLine, useTypewriter } from './Monk';
 
 const near = (yocto) => `${yoctoToNear(yocto, 3)} Ⓝ`;
 const view = (provider, method, args) => provider.callFunction(CONTRACT_ID, method, args);
@@ -29,14 +30,123 @@ function phase(b, now) {
 }
 
 /** Reseñas del crítico (JSON en IPFS) con la prueba de NEAR AI si la hay. */
-function Reviews({ battle, beats }) {
+function useReport(cid) {
   const [report, setReport] = useState(null);
   const [error, setError] = useState('');
   useEffect(() => {
-    if (!battle.review_cid) return;
-    fetchIpfs(battle.review_cid).then(async (b) => JSON.parse(await b.text())).then(setReport).catch((e) => setError(e.message));
-  }, [battle.review_cid]);
+    if (!cid) return;
+    fetchIpfs(cid).then(async (b) => JSON.parse(await b.text())).then(setReport).catch((e) => setError(e.message));
+  }, [cid]);
+  return { report, error };
+}
 
+const LISTEN_SECONDS = 9;
+
+/**
+ * La escena del veredicto: The Monk escucha cada remix (del último al primero), mueve la cabeza al
+ * tempo del beat, y dice su nota, su reseña y su mantra. Al final, el ganador: el fader sube y se ilumina.
+ */
+function Verdict({ battle, beats, report, onClose }) {
+  const order = [...battle.results].reverse();
+  const [i, setI] = useState(0);
+  const [stage, setStage] = useState('listen'); // listen | speak | final
+  const [left, setLeft] = useState(LISTEN_SECONDS);
+  const audioRef = useRef(null);
+  const r = order[i];
+  const beat = r && beats[r.token_id];
+  const rev = r && report?.reviews?.find((x) => x.token_id === r.token_id);
+  const winner = r && r.rank === 1;
+  const text = stage === 'speak' || stage === 'final' ? (rev?.review || 'No words. Only the score.') : '';
+  const { shown, done } = useTypewriter(text);
+  const mantra = rev?.mantra || (r ? fallbackMantra(r.score) : '');
+
+  // Reproduce el remix mientras The Monk escucha.
+  useEffect(() => {
+    if (stage !== 'listen' || !beat) return undefined;
+    window.dispatchEvent(new Event('msb:stop-sequencer'));
+    window.dispatchEvent(new Event('msb:stop-gallery'));
+    const a = new Audio(ipfsUrl(beat.audio_cid));
+    a.loop = true;
+    a.volume = 0.8;
+    a.play().catch(() => {});
+    audioRef.current = a;
+    setLeft(LISTEN_SECONDS);
+    const t = setInterval(() => setLeft((v) => {
+      if (v <= 1) { clearInterval(t); setStage(winner ? 'final' : 'speak'); return 0; }
+      return v - 1;
+    }), 1000);
+    return () => { clearInterval(t); a.pause(); };
+  }, [stage, beat, winner]);
+
+  // Al hablar, la música baja; en el ganador, vuelve a sonar.
+  useEffect(() => {
+    if (stage === 'speak') audioRef.current?.pause();
+    if (stage === 'final' && beat) {
+      const a = new Audio(ipfsUrl(beat.audio_cid));
+      a.loop = true;
+      a.volume = 0.6;
+      a.play().catch(() => {});
+      audioRef.current = a;
+      return () => a.pause();
+    }
+    return undefined;
+  }, [stage, beat]);
+
+  if (!r) return null;
+  const mood = stage === 'listen' ? 'listening'
+    : winner ? (done ? 'pleased' : 'surprised')
+      : r.score >= 70 ? 'pleased' : r.score >= 45 ? 'calm' : 'bored';
+  const fader = stage === 'listen' ? 0.15 : winner ? 1 : Math.max(0.05, r.score / 110);
+  const bpm = rev?.features?.bpm || 90;
+
+  function next() {
+    audioRef.current?.pause();
+    if (i + 1 < order.length) { setI(i + 1); setStage('listen'); } else onClose();
+  }
+
+  return (
+    <div className="verdict" role="dialog" aria-label={`Verdict of ${battle.title}`}>
+      <div className="verdict-progress" aria-hidden="true">
+        {order.map((x, k) => <span key={x.token_id} className={k <= i ? 'on' : ''} />)}
+      </div>
+      <div className="verdict-stage">
+        <Monk mood={mood} bpm={bpm} fader={fader} size={150} />
+        <div style={{ display: 'grid', gap: 8, flex: 1, minWidth: 220 }}>
+          <span className="label">{winner ? 'And the winner is' : `Place #${r.rank}`}</span>
+          <span className="verdict-title">“{beat?.title || `Beat #${r.token_id}`}” · {shortAccount(beat?.creator || '')}</span>
+          {stage === 'listen' ? (
+            <Bubble small>Listening… {left}s</Bubble>
+          ) : (
+            <>
+              <span className="verdict-score">{r.score}<span className="hint">/100</span>
+                {r.prize !== '0' && <span className="ok-text" style={{ fontSize: 14, marginLeft: 10 }}>+{near(r.prize)}</span>}
+              </span>
+              <Bubble>
+                {shown}
+                {done && <span className="mantra">“{mantra}”</span>}
+              </Bubble>
+            </>
+          )}
+        </div>
+      </div>
+      {stage === 'final' && done && (
+        <div className="confetti" aria-hidden="true">
+          {Array.from({ length: 24 }, (_, k) => (
+            <i key={k} style={{ left: `${(k * 37) % 100}%`, background: ['#ffcf4a', '#ff6e57', '#7ef0c1', '#6f8cff', '#c27bf0'][k % 5], animationDelay: `${(k % 8) * 0.08}s` }} />
+          ))}
+        </div>
+      )}
+      <div className="bar">
+        {stage === 'listen'
+          ? <button onClick={() => setStage(winner ? 'final' : 'speak')}>Skip listening</button>
+          : <button className="primary" onClick={next} disabled={!done}>{i + 1 < order.length ? 'Next' : 'Close'}</button>}
+        <button className="mini" onClick={() => { audioRef.current?.pause(); onClose(); }}>Exit</button>
+      </div>
+    </div>
+  );
+}
+
+function Reviews({ battle, beats, report, error }) {
   const reviewOf = (id) => report?.reviews?.find((r) => r.token_id === id);
   const att = report?.attestation;
   return (
@@ -46,7 +156,7 @@ function Reviews({ battle, beats }) {
           <li key={r.token_id}>
             <strong>#{r.rank} · {beats[r.token_id]?.title || `Beat #${r.token_id}`}</strong>
             {' '}— {r.score}/100{r.prize !== '0' && <> · <span className="ok-text">won {near(r.prize)}</span></>}
-            {reviewOf(r.token_id) && <p className="hint">“{reviewOf(r.token_id).review}”</p>}
+            {reviewOf(r.token_id) && <p className="hint">“{reviewOf(r.token_id).review}”{reviewOf(r.token_id).mantra && <em> — {reviewOf(r.token_id).mantra}</em>}</p>}
           </li>
         ))}
       </ol>
@@ -102,7 +212,10 @@ function BattleCard({ battle, now, onRemix, onChanged }) {
   const [beats, setBeats] = useState({});
   const [entries, setEntries] = useState([]);
   const [error, setError] = useState('');
+  const [watching, setWatching] = useState(false);
+  const { report, error: reportError } = useReport(battle.settled ? battle.review_cid : null);
   const p = phase(battle, now);
+  const line = pickLine(battle.settled && battle.results.length === 0 ? MONK_LINES.empty : MONK_LINES[p], battle.id + Math.floor(now / 60000));
 
   useEffect(() => {
     let alive = true;
@@ -163,7 +276,17 @@ function BattleCard({ battle, now, onRemix, onChanged }) {
           {entries.map((b) => <li key={b.token_id}>#{b.token_id} “{b.title}” by {shortAccount(b.creator)}</li>)}
         </ul>
       )}
-      {battle.settled && <Reviews battle={battle} beats={beats} />}
+      {!watching && (
+        <div className="monk-host">
+          <Monk mood={p === 'judging' ? 'listening' : 'calm'} fader={battle.settled ? 1 : 0.3} size={96} />
+          <Bubble small>{line}</Bubble>
+        </div>
+      )}
+      {battle.settled && battle.results.length > 0 && !watching && (
+        <div className="bar"><button className="primary" onClick={() => setWatching(true)}>▶ Hear the verdict</button></div>
+      )}
+      {watching && <Verdict battle={battle} beats={beats} report={report} onClose={() => setWatching(false)} />}
+      {battle.settled && <Reviews battle={battle} beats={beats} report={report} error={reportError} />}
       {error && <p className="hint warn-text">{error}</p>}
     </article>
   );
@@ -202,6 +325,7 @@ export function Battles({ onOpenProject }) {
   async function remix(seed) {
     try {
       const text = await (await fetchIpfs(seed.project_cid)).text();
+      try { sessionStorage.setItem('msb-battle-seed', String(seed.token_id)); } catch { /* sin almacenamiento */ }
       onOpenProject(text, seed);
     } catch (e) {
       setError(`Could not open the seed: ${e.message}`);
@@ -211,8 +335,8 @@ export function Battles({ onOpenProject }) {
   return (
     <Panel plain id="battles" title="Remix Battles">
       <p className="hint">
-        Every week a seed beat. Remix it, and <strong>The Critic</strong> — an AI agent running on NEAR AI Cloud —
-        scores every entry and the contract pays the prize. The critic's key can only call <code>settle_battle</code>:
+        Every week a seed beat. Remix it, and <strong>The Monk</strong> — our critic, an AI agent running on NEAR AI Cloud —
+        listens to every entry, scores it, and the contract pays the prize. The critic's key can only call <code>settle_battle</code>:
         it can rank, it can't take the money.
         {critic && <> Critic account: <a href={explorerAccountUrl(critic)} target="_blank" rel="noreferrer">{shortAccount(critic)}</a>.</>}
       </p>
