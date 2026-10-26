@@ -183,9 +183,25 @@ export function setVoiceEnabled(on) {
 }
 export const canSpeak = () => typeof window !== 'undefined' && 'speechSynthesis' in window;
 
-/** La voz más grave y calmada disponible en inglés. */
+// Voz elegida por la persona (nombre, tono, velocidad). Se guarda en este navegador.
+const VOICE_SETTINGS_KEY = 'msb-monk-voice-settings';
+export const DEFAULT_VOICE = { name: '', pitch: 0.55, rate: 0.86 };
+export function voiceSettings() {
+  try { return { ...DEFAULT_VOICE, ...JSON.parse(localStorage.getItem(VOICE_SETTINGS_KEY)) }; } catch { return { ...DEFAULT_VOICE }; }
+}
+export function saveVoiceSettings(v) {
+  try { localStorage.setItem(VOICE_SETTINGS_KEY, JSON.stringify(v)); } catch { /* solo esta sesión */ }
+}
+export const englishVoices = () => (canSpeak() ? window.speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith('en')) : []);
+
+/** La voz elegida, o la más grave y calmada disponible en inglés. */
 function pickVoice() {
-  const voices = window.speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith('en'));
+  const voices = englishVoices();
+  const chosen = voiceSettings().name;
+  if (chosen) {
+    const v = voices.find((x) => x.name === chosen);
+    if (v) return v;
+  }
   const prefer = ['Daniel', 'Google UK English Male', 'Fred', 'Alex', 'Microsoft Guy', 'Microsoft David', 'Aaron', 'Arthur'];
   for (const name of prefer) {
     const v = voices.find((x) => x.name.includes(name));
@@ -206,14 +222,58 @@ export function speak(lines) {
       const u = new SpeechSynthesisUtterance(text);
       if (voice) u.voice = voice;
       u.lang = voice?.lang || 'en-US';
-      u.rate = 0.86;
-      u.pitch = 0.55;
+      const { pitch, rate } = voiceSettings();
+      u.rate = rate;
+      u.pitch = pitch;
       if (k === list.length - 1) { u.onend = resolve; u.onerror = resolve; }
       synth.speak(u);
     });
     if (!list.length) resolve();
   });
 }
+/** Panel para elegir la voz de The Monk: voz, tono, velocidad y un botón para probar. */
+export function VoicePicker() {
+  const [voices, setVoices] = useState(englishVoices);
+  const [v, setV] = useState(voiceSettings);
+  useEffect(() => {
+    if (!canSpeak()) return undefined;
+    const load = () => setVoices(englishVoices());
+    window.speechSynthesis.addEventListener('voiceschanged', load);
+    load();
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
+  }, []);
+  if (!canSpeak()) return <p className="hint">This browser has no speech voices.</p>;
+  const update = (patch) => { const next = { ...v, ...patch }; setV(next); saveVoiceSettings(next); };
+  // Las voces "de personaje" de macOS primero: le quedan bien a un robot.
+  const fun = ['Zarvox', 'Trinoids', 'Ralph', 'Fred', 'Daniel', 'Albert', 'Bad News', 'Cellos', 'Whisper', 'Junior'];
+  const sorted = [...voices].sort((a, b) => {
+    const fa = fun.findIndex((n) => a.name.includes(n)); const fb = fun.findIndex((n) => b.name.includes(n));
+    return (fa < 0 ? 99 : fa) - (fb < 0 ? 99 : fb) || a.name.localeCompare(b.name);
+  });
+  return (
+    <details className="voice-picker">
+      <summary>🎙 The Monk's voice</summary>
+      <div className="bar">
+        <label htmlFor="monk-voice">Voice
+          <select id="monk-voice" value={v.name} onChange={(e) => update({ name: e.target.value })}>
+            <option value="">Automatic</option>
+            {sorted.map((x) => <option key={x.name} value={x.name}>{x.name}{x.localService ? '' : ' (online)'}</option>)}
+          </select>
+        </label>
+        <label htmlFor="monk-pitch">Pitch
+          <input id="monk-pitch" type="range" min="0.1" max="2" step="0.05" value={v.pitch} onChange={(e) => update({ pitch: +e.target.value })} />
+        </label>
+        <label htmlFor="monk-rate">Speed
+          <input id="monk-rate" type="range" min="0.5" max="1.4" step="0.02" value={v.rate} onChange={(e) => update({ rate: +e.target.value })} />
+        </label>
+        <button className="mini" onClick={() => { setVoiceEnabled(true); speak(['Less.', 'Then less again.', 'This one breathes.']); }}>▶ Test</button>
+        <button className="mini" onClick={() => update({ ...DEFAULT_VOICE })}>Reset</button>
+      </div>
+      <p className="hint">Voices come from your device, so they differ between computers. On a Mac, try Zarvox, Trinoids or Ralph.</p>
+    </details>
+  );
+}
+
 export function stopSpeaking() {
   if (canSpeak()) window.speechSynthesis.cancel();
 }

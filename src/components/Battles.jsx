@@ -8,7 +8,7 @@ import { nearToYocto, payContract } from '../near/register';
 import { fetchIpfs, ipfsUrl } from '../near/ipfs';
 import {
   Bubble, MONK_LINES, Monk, canSpeak, fallbackMantra, pickLine, setVoiceEnabled, speak, stopSpeaking, useTypewriter,
-  verdictCard, voiceEnabled,
+  VoicePicker, verdictCard, voiceEnabled,
 } from './Monk';
 
 const APP_URL = 'https://musecure-beats.vercel.app';
@@ -431,6 +431,7 @@ export function Battles({ onOpenProject }) {
         it can rank, it can't take the money.
         {critic && <> Critic account: <a href={explorerAccountUrl(critic)} target="_blank" rel="noreferrer">{shortAccount(critic)}</a>.</>}
       </p>
+      <VoicePicker />
       {battles === null && !error && <p className="hint">Loading…</p>}
       {battles && battles.length === 0 && <p className="hint">No battles yet. The first one is coming soon.</p>}
       {battles?.map((b) => <BattleCard key={b.id} battle={b} now={now} onRemix={remix} onChanged={load} />)}
