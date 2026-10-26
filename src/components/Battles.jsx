@@ -129,7 +129,7 @@ function Verdict({ battle, beats, report, onClose }) {
       </div>
       <div className="verdict-stage">
         <div ref={monkRef}><Monk mood={mood} bpm={bpm} fader={fader} size={150} /></div>
-        <div style={{ display: 'grid', gap: 8, flex: 1, minWidth: 220 }}>
+        <div className="verdict-info">
           <span className="label">{winner ? 'And the winner is' : `Place #${r.rank}`}</span>
           <span className="verdict-title">“{beat?.title || `Beat #${r.token_id}`}” · {shortAccount(beat?.creator || '')}</span>
           {stage === 'listen' ? (
@@ -137,7 +137,7 @@ function Verdict({ battle, beats, report, onClose }) {
           ) : (
             <>
               <span className="verdict-score">{r.score}<span className="hint">/100</span>
-                {r.prize !== '0' && <span className="ok-text" style={{ fontSize: 14, marginLeft: 10 }}>+{near(r.prize)}</span>}
+                {r.prize !== '0' && <span className="ok-text verdict-prize">+{near(r.prize)}</span>}
               </span>
               <Bubble>
                 {shown}
@@ -292,7 +292,7 @@ function FundBox({ battle, onChanged }) {
   }
   return (
     <div className="bar">
-      <input type="number" min="0.01" step="0.1" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="NEAR to add" style={{ width: '6em' }} />
+      <input type="number" min="0.01" step="0.1" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="NEAR to add" className="text amount-input" />
       <button className="mini" onClick={fund} disabled={busy}>{busy ? 'Funding…' : `Add ${amount || 0} NEAR to the prize`}</button>
       {msg && <span className="hint">{msg}</span>}
     </div>

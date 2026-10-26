@@ -245,9 +245,9 @@ export function RegisterPanel({ title, onTitle, loopSec = 8, buildFiles, remixOf
             </div>
           )}
           <label htmlFor="reg-title">Name
-            <input id="reg-title" type="text" className="text" maxLength={60} value={title}
+            <input id="reg-title" type="text" className="text grow" maxLength={60} value={title}
               placeholder={remixOf ? `My remix of "${remixOf.title}"` : 'Name your beat'}
-              onChange={(e) => onTitle?.(e.target.value)} style={{ flex: 1 }} />
+              onChange={(e) => onTitle?.(e.target.value)} />
           </label>
           {(!title.trim() || title.trim() === 'My beat') && (
             <p className="hint warn-text">Give it its own name — this is how it shows in the gallery, in battles and on the NFT.</p>

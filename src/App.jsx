@@ -54,6 +54,13 @@ export default function App() {
     return () => { window.removeEventListener('msb:open-panel', onOpen); window.removeEventListener('msb:open-tree', onTree); };
   }, []);
   const [treeRoot, setTreeRoot] = useState(null);
+  // Tema: oscuro por defecto; la elección se guarda en este navegador.
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('msb-theme') || 'dark'; } catch { return 'dark'; } });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem('msb-theme', theme); } catch { /* solo esta sesión */ }
+  }, [theme]);
+  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
   // Una vez registrado, el beat abierto pasa a ser el nuevo remix: se quita el vínculo pendiente.
   const clearRemix = () => mutate((d) => { d.remixOf = null; });
   /** Al registrar: avisa al tutorial (¿era remix? ¿de la semilla de una batalla?) y suelta el vínculo de remix. */
@@ -322,6 +329,8 @@ export default function App() {
         </div>
         <div className="header-right">
           <button className="mini help" aria-pressed={drawer === 'guide'} onClick={() => toggleDrawer('guide')}>❓ How it works</button>
+          <button className="mini theme-toggle" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            title={theme === 'dark' ? 'Light theme' : 'Dark theme'}>{theme === 'dark' ? '☀️' : '🌙'}</button>
           <AccountBar />
         </div>
       </header>

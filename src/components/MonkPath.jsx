@@ -130,7 +130,7 @@ export function MonkPath({ beat: S }) {
       <span className="path-check" aria-hidden="true">{done[c.id] ? '✓' : ''}</span>
       <span>
         <strong>{c.title}</strong>
-        <span className="hint" style={{ display: 'block' }}>{c.task}</span>
+        <span className="hint block">{c.task}</span>
       </span>
     </li>
   );

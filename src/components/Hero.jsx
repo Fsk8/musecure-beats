@@ -2,15 +2,14 @@ import { useState } from 'react';
 import { Monk } from './Monk';
 
 // Franja de bienvenida: dice en 5 segundos qué es la app, por qué es especial y por dónde empezar.
-// Se puede ocultar; queda oculta en este navegador.
 
-const KEY = 'msb-hero-hidden';
-const hidden = () => { try { return localStorage.getItem(KEY) === '1'; } catch { return false; } };
-
+// Oculta solo hasta recargar la página: cada visita vuelve a mostrarla.
 export function Hero({ playing, onPlay, onTour, onOpen }) {
-  const [gone, setGone] = useState(hidden);
-  if (gone) return null;
-  const hide = () => { try { localStorage.setItem(KEY, '1'); } catch { /* solo esta sesión */ } setGone(true); };
+  const [gone, setGone] = useState(false);
+  if (gone) {
+    return <button className="mini hero-show" onClick={() => setGone(false)}>ⓘ What is MuSecure Beats?</button>;
+  }
+  const hide = () => setGone(true);
   return (
     <section className="hero" aria-label="What is MuSecure Beats">
       <div className="hero-text">
