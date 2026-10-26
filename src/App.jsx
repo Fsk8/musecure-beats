@@ -7,6 +7,7 @@ import {
   beatArt, moveBar, quantizeTrack, randomTrack, rotateTrack,
 } from './music/patterns';
 import { audioBufferToWav, downloadBlob } from './io/files';
+import { midiBlob } from './music/midi';
 import { useBeatState } from './state/useBeatState';
 import { BASSES, LEADS, PADS } from './audio/presets';
 import { Transport, ConfirmRandomAll } from './components/Transport';
@@ -141,7 +142,7 @@ export default function App() {
     if (!window.confirm(`This replaces your open beat with "${beat.title}". Save it first if you want to keep it. Continue?`)) return;
     const link = { token_id: beat.token_id, title: beat.title, creator: beat.creator, remix_price: beat.remix_price, project_cid: beat.project_cid };
     loaded.remixOf = link;
-        // Sin nombre: el panel de registro pide uno propio (sugiere "My remix of …").
+    // Sin nombre: el panel de registro pide uno propio (sugiere "My remix of …").
     loaded.title = '';
     if (engine.playing) { engine.stop(); setPlaying(false); }
     setUndoBuf(null);
@@ -391,6 +392,10 @@ export default function App() {
         onLoops={setWavLoops}
         loopSec={loopSeconds(S)}
         onExportWav={exportWav}
+        onExportMidi={() => {
+          downloadBlob(midiBlob(S, wavLoops), `${fileSafeName(S.title)}.mid`);
+          setSaveMessage(`MIDI ready: ${fileSafeName(S.title)}.mid (${wavLoops} ${wavLoops === 1 ? 'loop' : 'loops'}, 4 tracks).`);
+        }}
         onCancel={() => engine.cancelRecording()}
         recording={recording}
         progress={recProgress}
@@ -398,7 +403,7 @@ export default function App() {
       />
       </div>
       <div hidden={drawer !== 'register'}>
-            <RegisterPanel title={S.title} onTitle={(v) => mutate((d) => { d.title = v; })} loopSec={loopSeconds(S)} buildFiles={buildRegisterFiles} remixOf={S.remixOf} beat={S} onRegistered={onRegistered} />
+      <RegisterPanel title={S.title} onTitle={(v) => mutate((d) => { d.title = v; })} loopSec={loopSeconds(S)} buildFiles={buildRegisterFiles} remixOf={S.remixOf} beat={S} onRegistered={onRegistered} />
       </div>
       <div hidden={drawer !== 'battles'}>
         {drawer === 'battles' && <Battles onOpenProject={openFromGallery} />}

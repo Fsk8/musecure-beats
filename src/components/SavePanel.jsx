@@ -10,7 +10,7 @@ const fmtTime = (sec) => {
 };
 
 export function SavePanel({
-  title, onTitle, onSaveProject, onOpenProject, loops, onLoops, loopSec, onExportWav, onCancel,
+  title, onTitle, onSaveProject, onOpenProject, loops, onLoops, loopSec, onExportWav, onExportMidi, onCancel,
   recording, progress, message,
 }) {
   const fileInput = useRef(null);
@@ -47,6 +47,9 @@ export function SavePanel({
         </label>
         <button className="primary-soft" onClick={onExportWav} disabled={recording}>
           {recording ? `Rendering… ${fmtTime(totalSec * (1 - progress))} left` : 'Export WAV'}
+        </button>
+        <button onClick={onExportMidi} disabled={recording} title="One track per instrument (drums on channel 10, General MIDI). Drag it into Ableton, Logic, FL Studio, Reaper…">
+          Export MIDI
         </button>
         {recording && <button onClick={onCancel}>Cancel</button>}
       </div>

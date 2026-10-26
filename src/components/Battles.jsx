@@ -6,7 +6,12 @@ import { yoctoToNear } from '../near/contract';
 import { CONTRACT_ID, explorerAccountUrl, explorerTxUrl, shortAccount } from '../near/config';
 import { nearToYocto, payContract } from '../near/register';
 import { fetchIpfs, ipfsUrl } from '../near/ipfs';
-import { Bubble, MONK_LINES, Monk, fallbackMantra, pickLine, useTypewriter } from './Monk';
+import {
+  Bubble, MONK_LINES, Monk, canSpeak, fallbackMantra, pickLine, setVoiceEnabled, speak, stopSpeaking, useTypewriter,
+  verdictCard, voiceEnabled,
+} from './Monk';
+
+const APP_URL = 'https://musecure-beats.vercel.app';
 
 const near = (yocto) => `${yoctoToNear(yocto, 3)} Ⓝ`;
 const view = (provider, method, args) => provider.callFunction(CONTRACT_ID, method, args);
@@ -59,6 +64,17 @@ function Verdict({ battle, beats, report, onClose }) {
   const text = stage === 'speak' || stage === 'final' ? (rev?.review || 'No words. Only the score.') : '';
   const { shown, done } = useTypewriter(text);
   const mantra = rev?.mantra || (r ? fallbackMantra(r.score) : '');
+  const monkRef = useRef(null);
+  const [voice, setVoice] = useState(voiceEnabled);
+
+  // The Monk dice su reseña y su mantra en voz alta.
+  useEffect(() => {
+    if ((stage !== 'speak' && stage !== 'final') || !voice) return undefined;
+    const intro = stage === 'final' ? 'And the winner is.' : '';
+    speak([intro, text, mantra]);
+    return () => stopSpeaking();
+  }, [stage, i, voice]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => stopSpeaking(), []);
 
   // Reproduce el remix mientras The Monk escucha.
   useEffect(() => {
@@ -100,6 +116,7 @@ function Verdict({ battle, beats, report, onClose }) {
   const bpm = rev?.features?.bpm || 90;
 
   function next() {
+    stopSpeaking();
     audioRef.current?.pause();
     if (i + 1 < order.length) { setI(i + 1); setStage('listen'); } else onClose();
   }
@@ -110,7 +127,7 @@ function Verdict({ battle, beats, report, onClose }) {
         {order.map((x, k) => <span key={x.token_id} className={k <= i ? 'on' : ''} />)}
       </div>
       <div className="verdict-stage">
-        <Monk mood={mood} bpm={bpm} fader={fader} size={150} />
+        <div ref={monkRef}><Monk mood={mood} bpm={bpm} fader={fader} size={150} /></div>
         <div style={{ display: 'grid', gap: 8, flex: 1, minWidth: 220 }}>
           <span className="label">{winner ? 'And the winner is' : `Place #${r.rank}`}</span>
           <span className="verdict-title">“{beat?.title || `Beat #${r.token_id}`}” · {shortAccount(beat?.creator || '')}</span>
@@ -136,12 +153,86 @@ function Verdict({ battle, beats, report, onClose }) {
           ))}
         </div>
       )}
+      {stage === 'final' && done && (
+        <ShareVerdict monkRef={monkRef} battle={battle} beat={beat} result={r} mantra={mantra} />
+      )}
       <div className="bar">
+        {canSpeak() && (
+          <button className="mini" aria-pressed={voice} onClick={() => { setVoiceEnabled(!voice); setVoice(!voice); }}>
+            {voice ? '🔊 Voice on' : '🔇 Voice off'}
+          </button>
+        )}
         {stage === 'listen'
           ? <button onClick={() => setStage(winner ? 'final' : 'speak')}>Skip listening</button>
           : <button className="primary" onClick={next} disabled={!done}>{i + 1 < order.length ? 'Next' : 'Close'}</button>}
-        <button className="mini" onClick={() => { audioRef.current?.pause(); onClose(); }}>Exit</button>
+        <button className="mini" onClick={() => { stopSpeaking(); audioRef.current?.pause(); onClose(); }}>Exit</button>
       </div>
+    </div>
+  );
+}
+
+/** Imagen del veredicto para publicar (X, Instagram…): descargar, compartir o abrir el post en X. */
+function ShareVerdict({ monkRef, battle, beat, result, mantra }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const title = beat?.title || `Beat #${result.token_id}`;
+  const prize = result.prize !== '0' ? near(result.prize) : '';
+  const postText = `The Monk has spoken: "${title}" wins ${battle.title} on MuSecure Beats with ${result.score}/100${prize ? ` and ${prize}` : ''}.\n\n"${mantra}"\n\nJudged by an AI on @NEARProtocol AI Cloud, paid on chain.`;
+
+  async function makeCard() {
+    return verdictCard({
+      svgEl: monkRef.current?.querySelector('svg'),
+      battleTitle: battle.title,
+      beatTitle: title,
+      creator: shortAccount(beat?.creator || ''),
+      score: result.score,
+      mantra,
+      prize,
+      url: APP_URL,
+    });
+  }
+
+  async function download() {
+    setBusy(true);
+    try {
+      const blob = await makeCard();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `monk-verdict-${battle.id}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      setMsg('Image saved. Attach it to your post.');
+    } catch (e) {
+      setMsg(`Could not create the image: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function share() {
+    setBusy(true);
+    try {
+      const blob = await makeCard();
+      const file = new File([blob], `monk-verdict-${battle.id}.png`, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], text: postText, url: APP_URL });
+      } else {
+        await download();
+      }
+    } catch (e) {
+      if (e?.name !== 'AbortError') setMsg(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const xUrl = `https://x.com/intent/post?text=${encodeURIComponent(postText)}&url=${encodeURIComponent(APP_URL)}`;
+  return (
+    <div className="bar">
+      <button className="primary" onClick={share} disabled={busy}>{busy ? 'Creating…' : 'Share the verdict'}</button>
+      <button className="mini" onClick={download} disabled={busy}>Download image</button>
+      <a className="mini" href={xUrl} target="_blank" rel="noreferrer">Post on X</a>
+      {msg && <span className="hint">{msg}</span>}
     </div>
   );
 }

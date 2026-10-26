@@ -8,6 +8,8 @@ import { nearToYocto, payContract, sha256Hex } from '../near/register';
 import { licenseCertificateSvg } from '../near/certificate';
 import { isSealed, openSealedProject } from '../near/seal';
 import { downloadBlob } from '../io/files';
+import { midiBlob } from '../music/midi';
+import { fileSafeName, parseProjectFile } from '../music/patterns';
 import { MONAD_EXPLORER, anchorInMusecure, beatAccountStatus } from '../near/musecure';
 
 const pct = (bps) => `${(bps / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })} %`;
@@ -120,6 +122,22 @@ function LicenseTools({ beat: b, holder, onRenderStems }) {
     }
   }
 
+  /** MIDI de las 4 pistas, desde el proyecto (abierto en IPFS o sellado, solo para el dueño). */
+  async function midi() {
+    setError('');
+    try {
+      setStep('Preparing MIDI…');
+      const text = sealed
+        ? await openSealedProject({ account, accountId, beat: b, getAccessToken, onStep: setStep })
+        : await (await fetchIpfs(b.project_cid)).text();
+      downloadBlob(midiBlob(parseProjectFile(text)), `${fileSafeName(b.title)}-${b.token_id}.mid`);
+    } catch (e) {
+      setError(e?.message || String(e));
+    } finally {
+      setStep('');
+    }
+  }
+
   function certificate() {
     const svg = licenseCertificateSvg({ beat: b, licensee: holder });
     downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), `license-beat-${b.token_id}.svg`);
@@ -130,6 +148,11 @@ function LicenseTools({ beat: b, holder, onRenderStems }) {
       {(!sealed || isOwner) && (
         <button onClick={stems} disabled={Boolean(step)} title={sealed ? 'Opens the sealed project with the NFT account and renders each track' : 'Each track as a separate WAV, rendered from the project on IPFS'}>
           {step || (sealed ? 'Download stems (sealed · owner only)' : 'Download stems (4 WAV)')}
+        </button>
+      )}
+      {(!sealed || isOwner) && (
+        <button onClick={midi} disabled={Boolean(step)} title="The 4 tracks as MIDI: drag it into your DAW and play it with your own instruments">
+          Download MIDI
         </button>
       )}
       {sealed && !isOwner && <span className="hint">🔒 Stems are sealed in the NFT: only its owner can open them. Your license covers the mix.</span>}

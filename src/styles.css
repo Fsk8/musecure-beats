@@ -251,3 +251,5 @@ button.mini{padding:2px 6px;font-size:11px}
 .path-item.done strong{text-decoration:line-through;text-decoration-color:var(--muted)}
 .path-check{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff}
 .path-item.done .path-check{background:#34c895;border-color:#34c895}
+.beard-hair{fill:#eef0f6;stroke:#b9bfd3;stroke-width:1.5}
+.beard-strands path{stroke:#c9cee0}

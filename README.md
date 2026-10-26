@@ -20,7 +20,7 @@ Part of the [MuSecure](https://github.com/Fsk8/MuSecure-Core-Functions) ecosyste
 | **Owns money** | Every NFT keeps its own *authors' balance* inside the contract. Anyone can trigger `claim`, and the money always goes to the credited authors — never to the caller. |
 | **Earns royalties** | 50 % of every income goes to the current owner, 50 % to the authors. Remixes send 20 % of their authors' share **up to the original, in cascade** across the whole remix tree. 10 % of every resale goes to the authors (also exposed as NEP-199 payouts for external marketplaces). |
 | **Holds inventory / is an account** | Each NFT has **its own EVM address**, derived by NEAR's MPC network from the contract and the path `beat-<id>` (**Chain Signatures**). Only the current NFT owner can make it sign (`sign_for_beat`). We use it to certify the beat on MuSecure (Monad) — the certificate belongs to the NFT, not to a person. |
-| **Carries credentials / access rights** | Non-exclusive licenses are on-chain credentials (`has_lease`), verifiable by anyone (a distributor, a label, a platform). Licensees get stems and a license certificate. |
+| **Carries credentials / access rights** | Non-exclusive licenses are on-chain credentials (`has_lease`), verifiable by anyone (a distributor, a label, a platform). Licensees get stems (WAV), MIDI and a license certificate. |
 | **Access rights that travel** | A **sealed project** is encrypted (Lighthouse) to the NFT's own address. Only the current owner can obtain the key. **Sell the NFT and the buyer can open it; the seller can't.** |
 | **Dynamic NFTs** | The cover is an SVG **generated on chain** from the beat's notes, with a level (1–10) and badges that evolve: Original/Remix, Remixed, Seed, Licensed, Popular, Earns royalties, 1 NEAR earned, Exclusive sold, Collaborative, Battle winner. Standard NEP-177 metadata, so any wallet or explorer sees it up to date. |
 | **NEP-171** | Full NEP-171/177/178/181 implementation (`near-contract-standards` 5.29.1) plus NEP-199 payouts. |
@@ -143,6 +143,7 @@ flowchart LR
 - **The Critic can't hear.** It judges features computed from the sequencer project, not the audio. LLM scoring isn't deterministic: re-judging can shift scores; the official result is the one settled on chain and published on IPFS. The critic server is trusted to run the model honestly — the TEE signature proves which model produced the reviews, and the contract limits what the critic can do with them.
 - **Battles are created by the admin.** Anyone can fund and enter; opening battle creation to everyone needs a deposit and anti-spam rules.
 - **Score 0 on MuSecure.** Beats registered from the sequencer skip MuSecure's catalog analysis; their metadata says so ("Catalog analysis: No").
+- **DAW plugin.** Beats export as MIDI (one track per instrument, General MIDI drums) for any DAW today; a VST3/AU/CLAP plugin that opens beats and licenses from NEAR is the next step.
 - **Testnet only.** Not audited.
 
 ## Run it locally
