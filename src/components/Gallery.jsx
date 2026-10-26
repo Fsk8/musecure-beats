@@ -180,7 +180,7 @@ function VerifyLicense({ beat: b }) {
   }
   return (
     <div className="lease-box">
-      <input className="text" aria-label="NEAR account to verify" placeholder="account to verify" value={who}
+      <input className="text" aria-label="NEAR account to verify" placeholder="NEAR account, e.g. name.testnet" value={who}
         onChange={(e) => { setWho(e.target.value); setResult(null); }} />
       <button onClick={check} disabled={result === 'checking'}>{result === 'checking' ? 'Checking…' : 'Verify license'}</button>
       {result === 'yes' && <span className="ok-text">✓ Holds a non-exclusive license (on chain)</span>}
@@ -574,6 +574,7 @@ function OwnerBox({ beat: b, onChanged, onOpenSealed }) {
 
 function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged, onRenderStems, onOpenSealed }) {
   const [open, setOpen] = useState(false);
+  const [supporting, setSupporting] = useState(false);
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState('');
 
@@ -612,10 +613,17 @@ function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged, onRenderStems, 
         <button onClick={openProject} disabled={opening || !b.remix_allowed || isSealed(b)}
           title={isSealed(b) ? 'The project is sealed in the NFT' : b.remix_allowed ? 'Opens the project in the sequencer; when registered it becomes a remix of this beat' : 'The owner does not allow remixes'}>
           {opening ? 'Opening…' : isSealed(b) ? '🔒 Sealed project' : !b.remix_allowed ? 'Remix not allowed'
-            : `Remix${b.remix_price === '0' ? ' (free)' : ` (${yoctoToNear(b.remix_price)} Ⓝ)`}`}
+            : `Remix${b.remix_price === '0' ? ' · free' : ` · ${yoctoToNear(b.remix_price)} NEAR`}`}
         </button>
+        <button aria-expanded={supporting} onClick={() => setSupporting(!supporting)} title="Send NEAR to this beat: half to its owner, half to its authors">💛 Support</button>
         <button aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide details' : 'Details'}</button>
       </div>
+      {supporting && (
+        <div className="support-inline">
+          <span className="hint">Half goes to the NFT owner and half to its authors{b.parent_id ? ' (a share flows up to the original)' : ''}.</span>
+          <SupportBox beat={b} onChanged={onChanged} />
+        </div>
+      )}
       {openError && <p className="hint warn-text">{openError}</p>}
       {b.sale_price && <span className="badge ok">For sale · {yoctoToNear(b.sale_price)} Ⓝ</span>}
       <BuyBox beat={b} onChanged={onChanged} />
@@ -635,9 +643,6 @@ function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged, onRenderStems, 
           <span className="label">Credits</span>
           <CreditsView credits={b.credits} />
           <ClaimBox beat={b} onChanged={onChanged} />
-          <span className="label">Support</span>
-          <p className="hint">Half goes to the NFT owner and half to the authors (if it is a remix, a share flows up to the original).</p>
-          <SupportBox beat={b} onChanged={onChanged} />
           <span className="label">Fingerprints</span>
           <Hash label="Audio SHA-256" value={b.audio_hash} />
           <Hash label="Project SHA-256" value={b.project_hash} />
@@ -715,7 +720,7 @@ export function Gallery({ onOpenProject, onRenderStems, onOpenSealed }) {
     onOpenProject(text, b);
   }
 
-  const summary = beats ? `${beats.length} ${beats.length === 1 ? 'beat' : 'beats'} on NEAR testnet` : 'Loading…';
+  const summary = beats ? `Latest ${beats.length} ${beats.length === 1 ? 'beat' : 'beats'} on NEAR testnet` : error ? 'Could not load' : 'Loading…';
 
   return (
     <Panel plain id="gallery" title="Beats on NEAR" summary={summary}>
@@ -727,7 +732,12 @@ export function Gallery({ onOpenProject, onRenderStems, onOpenSealed }) {
         </span>
         <button onClick={load}>Refresh</button>
       </div>
-      {error && <p className="hint">{error}</p>}
+      {error && (
+        <div className="warn" role="alert">
+          <span>{error}. The NEAR network may be slow — try again.</span>
+          <button onClick={load}>Retry</button>
+        </div>
+      )}
       {beats && beats.length === 0 && <p className="hint">No beats registered yet.</p>}
       {beats && beats.length > 0 && (
         <ul className="beat-list">

@@ -144,7 +144,7 @@ export function RoyaltyTree({ initialRoot = null }) {
       {beats && roots.length === 0 && <p className="hint">No remixes yet. Remix a beat from the Gallery and its tree appears here.</p>}
 
       {roots.length > 0 && (
-        <label htmlFor="tree-root">Seed
+        <label htmlFor="tree-root">Original
           <select id="tree-root" value={effectiveRoot || ''} onChange={(e) => { setRootId(e.target.value); setSelected(null); }}>
             {roots.map((r) => (
               <option key={r.beat.token_id} value={r.beat.token_id}>
@@ -161,7 +161,7 @@ export function RoyaltyTree({ initialRoot = null }) {
             <div className="stat"><span className="label">Beats in the tree</span><strong>{tree.size}</strong></div>
             <div className="stat"><span className="label">Generations</span><strong>{Math.max(...view.nodes.map((n) => n.depth)) + 1}</strong></div>
             <div className="stat"><span className="label">Earned by the tree</span><strong>{near(tree.subtreeEarned.toString())}</strong></div>
-            <div className="stat"><span className="label">Seed earned</span><strong>{near(tree.beat.total_earned)}</strong></div>
+            <div className="stat"><span className="label">Original earned</span><strong>{near(tree.beat.total_earned)}</strong></div>
           </div>
           <div className="tree-scroll">
             <svg viewBox={`-4 -4 ${view.width + 8} ${view.height}`} className="tree-svg"

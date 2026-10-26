@@ -12,7 +12,7 @@ export function Mixer({ S, mutate }) {
   }).filter(Boolean);
 
   return (
-    <Panel id="mixer" title="Mixer" summary={flags.length ? flags.join(' · ') : 'All tracks playing'}>
+    <Panel id="mixer" title="Mixer" defaultOpen={false} summary={flags.length ? flags.join(' · ') : 'All tracks playing'}>
       <div className="mixer">
         {TRACKS.map((t, i) => {
           const m = S.mix[i];

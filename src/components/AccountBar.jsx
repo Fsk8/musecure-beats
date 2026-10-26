@@ -37,12 +37,15 @@ function Earnings() {
     }
   }
 
-  if (tx) return <a className="pill ok" href={explorerTxUrl(tx)} target="_blank" rel="noreferrer">✓ Withdrawn · view transaction</a>;
+  if (tx && earned === '0') return <a className="pill ok" href={explorerTxUrl(tx)} target="_blank" rel="noreferrer">✓ Withdrawn · view transaction</a>;
   if (earned === '0') return null;
   return (
-    <button className="pill ok" onClick={withdraw} disabled={busy} title={err || 'Withdraw your owner earnings to your account'}>
-      {busy ? 'Withdrawing…' : `Earnings: ${yoctoToNear(earned)} Ⓝ · Withdraw`}
-    </button>
+    <>
+      <button className="pill ok" onClick={() => { setTx(''); withdraw(); }} disabled={busy} title="Withdraw your owner earnings to your account">
+        {busy ? 'Withdrawing…' : `Earnings: ${yoctoToNear(earned)} NEAR · Withdraw`}
+      </button>
+      {err && <span className="pill warn" role="alert" title={err}>Withdraw failed: {err.length > 60 ? `${err.slice(0, 60)}…` : err}</span>}
+    </>
   );
 }
 

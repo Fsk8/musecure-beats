@@ -69,7 +69,7 @@ export default function App() {
   /** Al registrar: avisa al tutorial (¿era remix? ¿de la semilla de una batalla?) y suelta el vínculo de remix. */
   const onRegistered = (beat) => {
     let battleSeed = null;
-    try { battleSeed = sessionStorage.getItem('msb-battle-seed'); } catch { /* sin almacenamiento */ }
+    try { battleSeed = sessionStorage.getItem('msb-battle-seed'); sessionStorage.removeItem('msb-battle-seed'); } catch { /* sin almacenamiento */ }
     window.dispatchEvent(new CustomEvent('msb:registered', { detail: { beat, remixOf: S.remixOf, battleSeed } }));
     clearRemix();
   };
@@ -153,9 +153,14 @@ export default function App() {
   }
 
   /** Abre en el secuenciador el proyecto de un beat registrado (descargado de IPFS) para remixarlo. */
-  function openFromGallery(text, beat) {
+  function openFromGallery(text, beat, opts = {}) {
     const loaded = parseProjectFile(text);
     if (!window.confirm(`This replaces your open beat with "${beat.title}". Save it first if you want to keep it. Continue?`)) return;
+    // Remix desde una batalla: se marca recién ahora (después de confirmar), para el tutorial.
+    try {
+      if (opts.battle) sessionStorage.setItem('msb-battle-seed', String(beat.token_id));
+      else sessionStorage.removeItem('msb-battle-seed');
+    } catch { /* sin almacenamiento */ }
     const link = { token_id: beat.token_id, title: beat.title, creator: beat.creator, remix_price: beat.remix_price, project_cid: beat.project_cid };
     loaded.remixOf = link;
     // Sin nombre: el panel de registro pide uno propio (sugiere "My remix of …").
@@ -384,6 +389,8 @@ export default function App() {
         {confirmAll && <ConfirmRandomAll isRemix={Boolean(S.remixOf)} onYes={randomizeAll} onNo={() => setConfirmAll(false)} />}
       </Transport>
 
+      <MonkPath beat={S} />
+
 
       <SoundPanel S={S} mutate={mutate} />
       <Mixer S={S} mutate={mutate} />
@@ -405,7 +412,6 @@ export default function App() {
         qMessage={qMessage}
       />
 
-      <MonkPath beat={S} />
 
 
       <p className="note">

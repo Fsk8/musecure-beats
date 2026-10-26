@@ -51,9 +51,11 @@ export function TrackEditor({
         </label>
         <button onClick={onQuantize}>Quantize track</button>
         <button onClick={onUndo} disabled={!canUndo}>Undo</button>
-        <span className="label">Shift track</span>
-        <button onClick={() => onShift(-1)} aria-label="Shift track one step left" title="One step earlier">◀</button>
-        <button onClick={() => onShift(1)} aria-label="Shift track one step right" title="One step later">▶</button>
+        <span className="shift-group" role="group" aria-label="Shift track">
+          <span className="label">Shift</span>
+          <button onClick={() => onShift(-1)} aria-label="Shift track one step left" title="One step earlier">◀</button>
+          <button onClick={() => onShift(1)} aria-label="Shift track one step right" title="One step later">▶</button>
+        </span>
         <span className="hint" aria-live="polite">{qMessage}</span>
       </div>
 

@@ -422,8 +422,7 @@ export function Battles({ onOpenProject }) {
   async function remix(seed) {
     try {
       const text = await (await fetchIpfs(seed.project_cid)).text();
-      try { sessionStorage.setItem('msb-battle-seed', String(seed.token_id)); } catch { /* sin almacenamiento */ }
-      onOpenProject(text, seed);
+      onOpenProject(text, seed, { battle: true });
     } catch (e) {
       setError(`Could not open the seed: ${e.message}`);
     }
@@ -432,11 +431,18 @@ export function Battles({ onOpenProject }) {
   return (
     <Panel plain id="battles" title="Remix Battles">
       <p className="hint">
-        Every week a seed beat. Remix it, and <strong>The Monk</strong> — our critic, an AI agent running on NEAR AI Cloud —
-        listens to every entry, scores it, and the contract pays the prize. The critic's key can only call <code>settle_battle</code>:
-        it can rank, it can't take the money.
-        {critic && <> Critic account: <a href={explorerAccountUrl(critic)} target="_blank" rel="noreferrer">{shortAccount(critic)}</a>.</>}
+        Every week: one beat to remix (the <strong>seed</strong>) and one rule. Remix it before the deadline.
+        <strong> The Monk</strong>, an AI judge, scores every entry and the contract pays the top three.
       </p>
+      <details className="fairness">
+        <summary>How is this fair?</summary>
+        <p className="hint">
+          The Monk runs on NEAR AI Cloud inside a secure enclave (TEE), which signs every response; the reviews, the exact
+          request and that signature are published on IPFS for anyone to check. His NEAR key can only call
+          <code> settle_battle</code>: he decides the ranking, but he cannot move the prize anywhere else — the contract pays the winners.
+          {critic && <> Critic account: <a href={explorerAccountUrl(critic)} target="_blank" rel="noreferrer">{shortAccount(critic)}</a>.</>}
+        </p>
+      </details>
       <VoicePicker />
       {battles === null && !error && <p className="hint">Loading…</p>}
       {battles && battles.length === 0 && <p className="hint">No battles yet. The first one is coming soon.</p>}

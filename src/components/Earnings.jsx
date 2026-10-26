@@ -84,8 +84,10 @@ export function Earnings() {
       if (hash) setTxs((list) => [{ label, hash }, ...list]);
       refresh();
       window.dispatchEvent(new Event('msb:beats-changed'));
+      return true;
     } catch (e) {
       setError(e?.message || String(e));
+      return false;
     } finally {
       setBusy('');
     }
@@ -94,10 +96,14 @@ export function Earnings() {
   const withdraw = () => run('Owner earnings withdrawal', () => payContract(account, 'withdraw', {}));
   const claim = (b) => run(`Distribution of #${b.token_id}`, () => payContract(account, 'claim', { token_id: b.token_id }));
   async function claimAll() {
-    for (const { b } of mine.filter((x) => big(x.b.authors_balance) > 0n)) {
+    const list = mine.filter((x) => big(x.b.authors_balance) > 0n);
+    if (!list.length) return;
+    if (!window.confirm(`Distribute the authors' balance of ${list.length} beat${list.length > 1 ? 's' : ''}? That is ${list.length} transaction${list.length > 1 ? 's' : ''}.`)) return;
+    for (const { b } of list) {
       // Una transacción por beat: si una falla, se detiene y muestra el error.
       // eslint-disable-next-line no-await-in-loop
-      await run(`Distribution of #${b.token_id}`, () => payContract(account, 'claim', { token_id: b.token_id }));
+      const ok = await run(`Distribution of #${b.token_id}`, () => payContract(account, 'claim', { token_id: b.token_id }));
+      if (!ok) break;
     }
   }
 

@@ -59,14 +59,14 @@ const SECTIONS = [
   {
     id: 'tree', icon: '🌳', title: '6. The royalty tree', action: ['tree', 'Open the Royalty tree'],
     steps: [
-      'Pick a seed and see all its remixes, and the remixes of those remixes, as a living tree.',
+      'Pick an original beat and see all its remixes, and the remixes of those remixes, as a living tree.',
       'Coins flow up the branches where money moves. Click any beat to see what it earned and what it sent to its original.',
     ],
   },
   {
     id: 'battles', icon: '⚔️', title: '7. Remix Battles and The Monk', action: ['battles', 'Open Battles'],
     steps: [
-      'Every week there is a seed beat and a rule (for example "keep the bassline, change the drums"). Anyone can add NEAR to the prize.',
+      'Every week there is a seed (the original beat to remix) and a rule (for example "keep the bassline, change the drums"). Anyone can add NEAR to the prize.',
       'Press Remix the seed, make it yours, give it a name and register it as Open before the deadline. It enters automatically.',
       'When the battle closes, The Monk — an AI critic running on NEAR AI Cloud — judges every remix against the rule and writes a review and a mantra.',
       'The contract pays 50 / 30 / 20 % of the prize to the top three NFTs. The winner gets the "Battle winner" badge and two levels.',
@@ -97,7 +97,7 @@ export function Guide() {
       <div className="monk-host">
         <Monk mood="calm" fader={0.5} size={90} />
         <Bubble>
-          Welcome. Here you make a beat, and the beat becomes an account: it owns money, pays its creators and its seed,
+          Welcome. Here you make a beat, and the beat becomes an account: it owns money, pays its creators and its original,
           and can win battles. Read slowly. Or just press play.
         </Bubble>
       </div>

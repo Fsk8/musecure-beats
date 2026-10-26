@@ -32,7 +32,7 @@ export const PATH = [
     praise: 'Same notes, new light. Remember this.' },
   { id: 'register', title: 'Make it yours', task: 'Register a beat on NEAR. It becomes an NFT that owns its money.', event: 'register',
     praise: 'Now it exists. Now it can earn.' },
-  { id: 'remix', title: 'Honor the seed', task: 'Remix someone else\'s beat from the Gallery and register it. The original gets paid.', event: 'remix',
+  { id: 'remix', title: 'Honor the original', task: 'Remix someone else\'s beat from the Gallery and register it. The original gets paid.', event: 'remix',
     praise: 'You took, and you gave back. Good.' },
   { id: 'battle', title: 'Face the Monk', task: 'Open Battles, press "Remix the seed" and register your remix before the deadline.', event: 'battle',
     praise: 'You came. I will listen.' },
@@ -136,7 +136,9 @@ export function MonkPath({ beat: S }) {
   );
 
   return (
-    <Panel id="challenge" title="The Monk's Path" summary={`Path ${pathDone}/${PATH.length} · Drills ${drillsDone}/${DRILLS.length}`}>
+    <Panel id="monk-path" title="The Monk's Path · learn by doing" defaultOpen={false}
+      summary={<span className="path-summary"><span className="path-bar" aria-hidden="true"><span style={{ width: `${(100 * (pathDone + drillsDone)) / (PATH.length + DRILLS.length)}%` }} /></span>
+        {current ? `Next: ${current.title}` : 'Path complete'} · {pathDone + drillsDone}/{PATH.length + DRILLS.length}</span>}>
       <div className="monk-host">
         <Monk mood={said ? 'pleased' : 'calm'} fader={pathDone / PATH.length} size={84} />
         <Bubble small={!said}>{line}</Bubble>
