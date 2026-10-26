@@ -53,7 +53,7 @@ const MAX_WAV_BYTES = 4 * 1024 * 1024;
 const LOOP_OPTIONS = [1, 2, 4];
 const wavBytes = (loopSec, loops) => Math.ceil((loopSec * loops + TAIL_SECONDS) * 48000 * 4) + 44; // 48 kHz: el peor caso común
 
-export function RegisterPanel({ title, loopSec = 8, buildFiles, remixOf: linkedRemix, beat, onRegistered }) {
+export function RegisterPanel({ title, onTitle, loopSec = 8, buildFiles, remixOf: linkedRemix, beat, onRegistered }) {
   const parent = useParentProject(linkedRemix?.project_cid);
   const similarity = useMemo(
     () => (parent.project && beat ? remixSimilarity(parent.project, beat) : null),
@@ -121,7 +121,7 @@ export function RegisterPanel({ title, loopSec = 8, buildFiles, remixOf: linkedR
     setResult(null);
     try {
       const cleanTitle = (title || '').trim();
-      if (!cleanTitle) throw new Error('Name your beat in "Save & export"');
+      if (!cleanTitle) throw new Error('Give your beat a name first');
       if (/["\\]/.test(cleanTitle)) throw new Error('The name cannot contain quotes or backslashes');
       const emails = collectEmails(mode === 'whole' ? [whole] : tracks.map((t) => t.rows));
       // Valida porcentajes y repetidos antes de crear cuentas en Privy (cuentas provisorias por email).
@@ -245,9 +245,16 @@ export function RegisterPanel({ title, loopSec = 8, buildFiles, remixOf: linkedR
               </span>
             </div>
           )}
+          <label htmlFor="reg-title">Name
+            <input id="reg-title" type="text" className="text" maxLength={60} value={title}
+              placeholder={remixOf ? `My remix of "${remixOf.title}"` : 'Name your beat'}
+              onChange={(e) => onTitle?.(e.target.value)} style={{ flex: 1 }} />
+          </label>
+          {(!title.trim() || title.trim() === 'My beat') && (
+            <p className="hint warn-text">Give it its own name — this is how it shows in the gallery, in battles and on the NFT.</p>
+          )}
           <p className="hint">
-            Registering <strong>{title || 'Untitled'}</strong>: the audio (one WAV loop) and the project go to IPFS, and their
-            hashes go to the contract, under {shortAccount(accountId)}.
+            The audio (WAV) and the project go to IPFS, and their hashes go to the contract, under {shortAccount(accountId)}.
           </p>
 
           <div className="bar">

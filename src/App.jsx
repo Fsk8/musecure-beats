@@ -141,7 +141,8 @@ export default function App() {
     if (!window.confirm(`This replaces your open beat with "${beat.title}". Save it first if you want to keep it. Continue?`)) return;
     const link = { token_id: beat.token_id, title: beat.title, creator: beat.creator, remix_price: beat.remix_price, project_cid: beat.project_cid };
     loaded.remixOf = link;
-    loaded.title = `${beat.title} (remix)`;
+        // Sin nombre: el panel de registro pide uno propio (sugiere "My remix of …").
+    loaded.title = '';
     if (engine.playing) { engine.stop(); setPlaying(false); }
     setUndoBuf(null);
     replaceState({ ...loaded, tab: S.tab, page: 0, emode: S.emode });
@@ -397,7 +398,7 @@ export default function App() {
       />
       </div>
       <div hidden={drawer !== 'register'}>
-      <RegisterPanel title={S.title} loopSec={loopSeconds(S)} buildFiles={buildRegisterFiles} remixOf={S.remixOf} beat={S} onRegistered={onRegistered} />
+            <RegisterPanel title={S.title} onTitle={(v) => mutate((d) => { d.title = v; })} loopSec={loopSeconds(S)} buildFiles={buildRegisterFiles} remixOf={S.remixOf} beat={S} onRegistered={onRegistered} />
       </div>
       <div hidden={drawer !== 'battles'}>
         {drawer === 'battles' && <Battles onOpenProject={openFromGallery} />}
