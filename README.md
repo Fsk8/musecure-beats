@@ -140,6 +140,7 @@ flowchart LR
 - **Trusted server pieces.** Account activation, credits by email and the MuSecure bridge run in Vercel functions with server-side keys. Sealing: the server verifies the NFT's signature and handles the project in memory while encrypting/decrypting, but stores no keys — without a fresh signature from the NFT owner it cannot decrypt.
 - **Open projects are public.** For open beats, anyone could rebuild the stems from the public project; the license is the verifiable *right* to use them. Sealed beats protect the project but turn off remixes.
 - **Licensees can't open sealed projects automatically.** Lighthouse access conditions don't support NEAR yet; the next step is a NEAR-aware condition (or sharing per license, signed by the NFT).
+- **Exact copies are caught, near-copies aren't yet.** Every beat's MuSecure audio fingerprint is indexed on chain (`get_beats_by_fingerprint`); the app warns before registering an identical beat, and MuSecure on Monad refuses to certify a duplicate fingerprint. The 30 % remix similarity check runs in the app, so a lightly edited copy can still be registered as original; a signed similarity oracle is the next step.
 - **The Critic can't hear.** It judges features computed from the sequencer project, not the audio. LLM scoring isn't deterministic: re-judging can shift scores; the official result is the one settled on chain and published on IPFS. The critic server is trusted to run the model honestly — the TEE signature proves which model produced the reviews, and the contract limits what the critic can do with them.
 - **Battles are created by the admin.** Anyone can fund and enter; opening battle creation to everyone needs a deposit and anti-spam rules.
 - **Score 0 on MuSecure.** Beats registered from the sequencer skip MuSecure's catalog analysis; their metadata says so ("Catalog analysis: No").
@@ -155,6 +156,8 @@ pnpm dev                     # http://localhost:5173
 ```
 
 Without `VITE_PRIVY_APP_ID` the app runs read-only: you can make music and browse registered beats.
+
+**Tests:** `pnpm test` (JS: music logic, MIDI export, critic features) · `pnpm test:contract` (Rust, 57 tests). Agents and reviewers: see [AGENTS.md](AGENTS.md) for a code map and where each claim lives.
 
 **Contract:** see [contracts/beats/README.md](contracts/beats/README.md) (build with `cargo near build non-reproducible-wasm`, tests with `cargo test`).
 

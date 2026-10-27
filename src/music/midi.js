@@ -5,7 +5,7 @@
 // - Bajo, lead y acordes con las notas de la escala elegida, igual que suenan en la app (incluye octavas).
 // - Celdas fuertes = velocidad 100, suaves = 45. El swing y la probabilidad no se exportan (el DAW los aplica).
 
-import { computeTheory, TRACKS } from './theory';
+import { computeTheory, TRACKS } from './theory.js';
 
 const PPQ = 480;
 const STEP = PPQ / 4; // un paso = semicorchea

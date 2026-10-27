@@ -1,6 +1,6 @@
 // Estado del beat y operaciones sobre patrones (sin audio ni UI).
-import { KITS, MAX_STEPS, PROBS, TRACKS } from './theory';
-import { BASSES, LEADS, PADS } from '../audio/presets';
+import { KITS, MAX_STEPS, PROBS, TRACKS } from './theory.js';
+import { BASSES, LEADS, PADS } from '../audio/presets.js';
 
 export const STORAGE_KEY = 'msb2';
 

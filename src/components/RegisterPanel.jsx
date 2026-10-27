@@ -69,7 +69,9 @@ export function RegisterPanel({ title, onTitle, loopSec = 8, buildFiles, remixOf
   useEffect(() => { if (!canDetach) setAsOriginal(false); }, [canDetach]);
   const remixOf = linkedRemix && !(canDetach && asOriginal) ? linkedRemix : null;
 
-  const { status, account, accountId, balance, refresh, getAccessToken } = useNear();
+  const { provider, status, account, accountId, balance, refresh, getAccessToken } = useNear();
+  // Mismo audio exacto ya registrado (misma huella de MuSecure): se avisa antes de firmar.
+  const [duplicate, setDuplicate] = useState(null);
   const [mode, setMode] = useState('whole');
   const [whole, setWhole] = useState([]);
   const [tracks, setTracks] = useState(TRACKS.map(() => ({ weight: 25, rows: [] })));
@@ -116,8 +118,9 @@ export function RegisterPanel({ title, onTitle, loopSec = 8, buildFiles, remixOf
     }
   }
 
-  async function submit() {
+  async function submit(allowDuplicate = false) {
     setError('');
+    setDuplicate(null);
     setWarning('');
     setResult(null);
     try {
@@ -157,6 +160,19 @@ export function RegisterPanel({ title, onTitle, loopSec = 8, buildFiles, remixOf
         musecure_fingerprint = fp.sha256;
       } catch (e) {
         setWarning(`Registered without a MuSecure audio fingerprint: ${e?.message || e}`);
+      }
+
+      // ¿Este audio exacto ya está registrado? MuSecure (Monad) rechaza huellas repetidas,
+      // y el contrato de NEAR las indexa: se avisa antes de subir y firmar.
+      if (musecure_fingerprint && !allowDuplicate) {
+        setStep('Checking for an identical beat…');
+        const same = await provider
+          .callFunction(CONTRACT_ID, 'get_beats_by_fingerprint', { fingerprint: musecure_fingerprint })
+          .catch(() => []);
+        if (same?.length) {
+          setDuplicate(same);
+          return;
+        }
       }
 
       setStep('Uploading to IPFS…');
@@ -340,7 +356,7 @@ export function RegisterPanel({ title, onTitle, loopSec = 8, buildFiles, remixOf
               </select>
             </label>
             <p className="hint">The gallery plays it on repeat. The MuSecure fingerprint always uses the first loop, so the same beat keeps the same fingerprint.</p>
-            <button className="primary" onClick={submit} disabled={busy || Boolean(result)}>
+            <button className="primary" onClick={() => submit()} disabled={busy || Boolean(result)}>
               {busy ? step : result ? `Registered as #${result.token_id} ✓` : remixOf && remixOf.remix_price !== '0'
                 ? `Register beat · pay ${yoctoToNear(remixOf.remix_price)} NEAR remix license` : 'Register beat'}
             </button>
@@ -348,6 +364,22 @@ export function RegisterPanel({ title, onTitle, loopSec = 8, buildFiles, remixOf
         </>
       )}
 
+      {duplicate && (
+        <div className="warn" role="alert">
+          <strong>⚠️ This exact audio is already registered as {duplicate.map((d) => `#${d.token_id} "${d.title}"`).join(', ')}.</strong>
+          <span className="hint">
+            Same MuSecure audio fingerprint. MuSecure on Monad refuses to certify a duplicate fingerprint, and everyone can see
+            the match on chain. If you are building on that beat, register it as a remix so the original gets paid.
+          </span>
+          <div className="bar">
+            <button className="primary" onClick={() => window.dispatchEvent(new CustomEvent('msb:open-panel', { detail: 'gallery' }))}>
+              Find it in the Gallery and remix it
+            </button>
+            <button onClick={() => submit(true)}>It's mine — register anyway</button>
+            <button className="mini" onClick={() => setDuplicate(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
       {error && <p className="hint warn-text" role="alert">{error}</p>}
       {warning && <p className="hint">{warning}</p>}
       {sealStep && <p className="hint">{sealStep}</p>}
