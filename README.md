@@ -73,6 +73,20 @@ The economy is the gameplay: a good seed earns from every remix and every prize 
 | Distribute authors' balance (`claim`) | _TODO_ |
 | The Critic settles a Remix Battle (`settle_battle`, NEAR AI reviews + TEE signature) | [488sN4h6…](https://testnet.nearblocks.io/txns/488sN4h69ePHpVH44rDw7CWhyYQ1u5n5teuCDFKsjqN5) · [reviews & proof](https://gateway.lighthouse.storage/ipfs/bafkreiganvfv35omrxjx6ws34j6lfng5n24hesa36skzb7tfuwwupkrl24) |
 
+## Proof bundle: what each beat NFT proves
+
+Short musical pieces collide: a 16-step drum pattern or a I–V–vi–IV progression is not original, and an audio fingerprint alone is easy to dodge and weak in a dispute. So MuSecure Beats doesn't try to "prove originality". Every registered beat carries a **proof bundle** on chain instead:
+
+| Proof | What it shows | Where |
+|---|---|---|
+| SHA-256 of the project file | This exact composition (notes, sounds, mix) existed and was registered by this account | `project_hash` |
+| SHA-256 of the rendered audio | The exact recording (the master) | `audio_hash` |
+| MuSecure audio fingerprint | Identifies the same audio across MuSecure Beats and MuSecure (Monad) | `musecure_fingerprint`, `get_beats_by_fingerprint` |
+| Author, credits and block timestamp | Who, with whom, and since when | `creator`, `credits`, `created_at_ms` |
+| Declared lineage | Which beat it was remixed from — and the royalty that follows | `parent_id`, `remix` |
+
+**Similarity informs attribution; it doesn't judge originality.** When a new beat matches an existing one exactly, the app warns and suggests registering it as a remix, so the money follows the lineage. Melodic tracks weigh more than drums, and generic patterns never trigger anything. Next: a symbolic melodic fingerprint (intervals and relative rhythm per track) that also recognises transposed or shifted melodies.
+
 ## How the money flows
 
 Each beat has two separate rights, as in the music industry:
@@ -140,7 +154,7 @@ flowchart LR
 - **Trusted server pieces.** Account activation, credits by email and the MuSecure bridge run in Vercel functions with server-side keys. Sealing: the server verifies the NFT's signature and handles the project in memory while encrypting/decrypting, but stores no keys — without a fresh signature from the NFT owner it cannot decrypt.
 - **Open projects are public.** For open beats, anyone could rebuild the stems from the public project; the license is the verifiable *right* to use them. Sealed beats protect the project but turn off remixes.
 - **Licensees can't open sealed projects automatically.** Lighthouse access conditions don't support NEAR yet; the next step is a NEAR-aware condition (or sharing per license, signed by the NFT).
-- **Exact copies are caught, near-copies aren't yet.** Every beat's MuSecure audio fingerprint is indexed on chain (`get_beats_by_fingerprint`); the app warns before registering an identical beat, and MuSecure on Monad refuses to certify a duplicate fingerprint. The 30 % remix similarity check runs in the app, so a lightly edited copy can still be registered as original; a signed similarity oracle is the next step.
+- **Exact copies are caught, near-copies aren't yet (see *Proof bundle*).** Every beat's MuSecure audio fingerprint is indexed on chain (`get_beats_by_fingerprint`); the app warns before registering an identical beat, and MuSecure on Monad refuses to certify a duplicate fingerprint. The 30 % remix similarity check runs in the app, so a lightly edited copy can still be registered as original; a signed similarity oracle is the next step.
 - **The Critic can't hear.** It judges features computed from the sequencer project, not the audio. LLM scoring isn't deterministic: re-judging can shift scores; the official result is the one settled on chain and published on IPFS. The critic server is trusted to run the model honestly — the TEE signature proves which model produced the reviews, and the contract limits what the critic can do with them.
 - **Battles are created by the admin.** Anyone can fund and enter; opening battle creation to everyone needs a deposit and anti-spam rules.
 - **Score 0 on MuSecure.** Beats registered from the sequencer skip MuSecure's catalog analysis; their metadata says so ("Catalog analysis: No").
