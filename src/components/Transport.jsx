@@ -1,7 +1,7 @@
 import { cutHz } from '../audio/engine';
 
 export function Transport({
-  S, mutate, playing, onTogglePlay, onLenChange, onRandomTrack, onAskRandomAll, onRandomSounds, onClearTrack, lite, onLiteChange, children,
+  S, mutate, playing, onTogglePlay, onLenChange, onAskRandomAll, lite, onLiteChange, children,
 }) {
   return (
     <>
@@ -56,10 +56,7 @@ export function Transport({
       </div>
 
       <div className="bar">
-        <button onClick={onRandomTrack}>Surprise me (track)</button>
-        <button id="randAll" onClick={onAskRandomAll}>Surprise me (all)</button>
-        <button onClick={onRandomSounds} title="Changes kit and sounds without touching the notes">Surprise me (sounds)</button>
-        <button onClick={onClearTrack}>Clear track</button>
+        <button id="randAll" onClick={onAskRandomAll} title="A whole new beat: all 4 tracks, in the current key">🎲 Surprise me (whole beat)</button>
       </div>
       {children}
     </section>

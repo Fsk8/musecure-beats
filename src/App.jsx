@@ -379,10 +379,7 @@ export default function App() {
         playing={playing}
         onTogglePlay={togglePlay}
         onLenChange={handleLenChange}
-        onRandomTrack={randomizeCurrent}
         onAskRandomAll={() => setConfirmAll(true)}
-        onClearTrack={clearTrack}
-        onRandomSounds={randomizeSounds}
         lite={lite}
         onLiteChange={setLite}
       >
@@ -392,12 +389,14 @@ export default function App() {
       <MonkPath beat={S} />
 
 
-      <SoundPanel S={S} mutate={mutate} />
+      <SoundPanel S={S} mutate={mutate} onRandomSounds={randomizeSounds} />
       <Mixer S={S} mutate={mutate} />
 
       <TrackEditor
         S={S}
         mutate={mutate}
+        onRandomTrack={randomizeCurrent}
+        onClearTrack={clearTrack}
         theory={theory}
         follow={follow}
         setFollow={setFollow}

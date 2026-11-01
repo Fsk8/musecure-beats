@@ -2,7 +2,7 @@ import { KITS, ROOTS, SCALES } from '../music/theory';
 import { Panel } from './Panel';
 import { BASSES, LEADS, PADS } from '../audio/presets';
 
-export function SoundPanel({ S, mutate }) {
+export function SoundPanel({ S, mutate, onRandomSounds }) {
   const set = (key, cast = (v) => v) => (e) => mutate((d) => { d[key] = cast(e.target.value); });
 
   return (
@@ -61,6 +61,9 @@ export function SoundPanel({ S, mutate }) {
             <option value="rand">Random arpeggio</option>
           </select>
         </label>
+      </div>
+      <div className="bar">
+        <button onClick={onRandomSounds} title="Changes kit and sounds without touching the notes">🎲 Surprise me (sounds)</button>
       </div>
     </Panel>
   );

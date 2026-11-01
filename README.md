@@ -154,12 +154,33 @@ flowchart LR
 - **Trusted server pieces.** Account activation, credits by email and the MuSecure bridge run in Vercel functions with server-side keys. Sealing: the server verifies the NFT's signature and handles the project in memory while encrypting/decrypting, but stores no keys — without a fresh signature from the NFT owner it cannot decrypt.
 - **Open projects are public.** For open beats, anyone could rebuild the stems from the public project; the license is the verifiable *right* to use them. Sealed beats protect the project but turn off remixes.
 - **Licensees can't open sealed projects automatically.** Lighthouse access conditions don't support NEAR yet; the next step is a NEAR-aware condition (or sharing per license, signed by the NFT).
-- **Exact copies are caught, near-copies aren't yet (see *Proof bundle*).** Every beat's MuSecure audio fingerprint is indexed on chain (`get_beats_by_fingerprint`); the app warns before registering an identical beat, and MuSecure on Monad refuses to certify a duplicate fingerprint. The 30 % remix similarity check runs in the app, so a lightly edited copy can still be registered as original; a signed similarity oracle is the next step.
+- **Exact copies are caught, near-copies aren't yet** (see *Proof bundle*). Every beat's MuSecure audio fingerprint is indexed on chain (`get_beats_by_fingerprint`); the app warns before registering an identical beat, and MuSecure on Monad refuses to certify a duplicate fingerprint. The 30 % remix similarity check runs in the app, so a lightly edited copy can still be registered as original; a signed similarity oracle is the next step.
 - **The Critic can't hear.** It judges features computed from the sequencer project, not the audio. LLM scoring isn't deterministic: re-judging can shift scores; the official result is the one settled on chain and published on IPFS. The critic server is trusted to run the model honestly — the TEE signature proves which model produced the reviews, and the contract limits what the critic can do with them.
 - **Battles are created by the admin.** Anyone can fund and enter; opening battle creation to everyone needs a deposit and anti-spam rules.
 - **Score 0 on MuSecure.** Beats registered from the sequencer skip MuSecure's catalog analysis; their metadata says so ("Catalog analysis: No").
 - **DAW plugin.** Beats export as MIDI (one track per instrument, General MIDI drums) for any DAW today; a VST3/AU/CLAP plugin that opens beats and licenses from NEAR is the next step.
 - **Testnet only.** Not audited.
+
+## Hackathon disclosure
+
+Per the NEAR HACKATHON rules (Q-001 to Q-005).
+
+**Built during the hackathon window** (from the announcement on 2026-10-19 to 2026-11-14), in this repository:
+- The MuSecure Beats web app: sequencer, gallery, registration, earnings, royalty tree, Remix Battles UI, The Monk and the tutorial.
+- The NEAR contract `contracts/beats` (NFT, credits, royalties, licenses, sales, dynamic cover, Chain Signatures account per NFT, sealed projects, battles) and its tests.
+- The Vercel functions in `api/` (account activation, IPFS upload, collaborators by email, MuSecure bridge, sealing, the critic on NEAR AI Cloud).
+
+This repository was created on **2026-10-24**, inside the window: all of its code is hackathon work. The submitted state is tagged `hackathon-submission`.
+
+**Pre-existing work (baseline, not judged):**
+- **MuSecure** on Monad testnet — the authorship registry, credits and licensing contracts and its backend — built by the same team before the hackathon ([repo](https://github.com/Fsk8/MuSecure-Core-Functions)). MuSecure Beats talks to it as an external service. The only changes made to MuSecure during the window were to support this bridge (its signing and gas APIs now accept a Privy session or a partner key).
+- **Audio fingerprint** in `src/fingerprint/`: ported unchanged from MuSecure, so both apps produce the same fingerprint for the same audio.
+
+**Third-party libraries:** `near-sdk` and `near-contract-standards` 5.29.1 (contract); React 18, Vite 5, Tone.js 14, `@near-js/*` 2.x, Privy (`@privy-io/react-auth`, `@privy-io/node`), viem 2, `@lighthouse-web3/sdk`, FFmpeg.wasm (`@ffmpeg/*`), `@noble/hashes`, `jose`. Services: NEAR testnet and Chain Signatures (`v1.signer-prod.testnet`), NEAR AI Cloud, Lighthouse/IPFS, Privy, Vercel.
+
+**AI assistance:** much of the code, tests and documentation was written with an AI coding assistant (Claude), directed and reviewed by the team.
+
+**Hints we lean on:** *NFTs* — dynamic NFTs, NEP-171, a sub-account for the critic. *Games* — agent NPC (The Monk), social login (email via Privy, no wallet), a player economy that runs without dev patches. *Open* — chain abstraction through Chain Signatures.
 
 ## Run it locally
 
@@ -206,3 +227,7 @@ contracts/beats/  NEAR contract (Rust): NFT, credits, royalties, leases, dynamic
 ## Credits
 
 Favio (music, product, build) and Ingrid (MuSecure co-creator). `src/fingerprint/` is ported from MuSecure (`src/workers/audioFingerprint.worker.ts`). Every sound is synthesized in the browser — no third-party samples.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

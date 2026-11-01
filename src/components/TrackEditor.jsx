@@ -10,21 +10,26 @@ const HINTS = {
 
 export function TrackEditor({
   S, mutate, theory, follow, setFollow, onCell,
-  qGrid, setQGrid, onQuantize, canUndo, onUndo, qMessage, onShift, onMoveBar,
+  qGrid, setQGrid, onQuantize, canUndo, onUndo, qMessage, onShift, onMoveBar, onRandomTrack, onClearTrack,
 }) {
   const t = S.tab;
 
   return (
     <Panel id="tracks" title="Tracks" summary={`Editing ${TRACKS[t].name} · ${S.len} steps`}>
       <div className="bar spread">
-        <div className="tabs" role="tablist">
-          {TRACKS.map((tr, i) => (
-            <button key={tr.id} role="tab" className="tab" aria-selected={S.tab === i}
-              style={{ '--c': `var(--t${i})` }}
-              onClick={() => mutate((d) => { d.tab = i; })}>
-              {tr.name}
-            </button>
-          ))}
+        <div className="bar">
+          <div className="tabs" role="tablist">
+            {TRACKS.map((tr, i) => (
+              <button key={tr.id} role="tab" className="tab" aria-selected={S.tab === i}
+                style={{ '--c': `var(--t${i})` }}
+                onClick={() => mutate((d) => { d.tab = i; })}>
+                {tr.name}
+              </button>
+            ))}
+          </div>
+          {/* Acciones sobre la pista seleccionada, junto a sus pestañas */}
+          <button onClick={onRandomTrack} title={`A new pattern for ${TRACKS[t].name}, in the current key`}>🎲 Surprise me ({TRACKS[t].name})</button>
+          <button onClick={onClearTrack} title={`Erase every note of ${TRACKS[t].name}`}>Clear {TRACKS[t].name}</button>
         </div>
         <div className="bar">
           <label htmlFor="emode">
