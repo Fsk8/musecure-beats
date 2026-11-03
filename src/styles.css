@@ -358,3 +358,10 @@ button.accent{border-color:var(--accent);color:var(--accent-text);font-weight:60
   .name{position:sticky;left:0;z-index:1;background:var(--panel);padding-right:4px}
 }
 @media (max-width:640px){.path-bar{display:none}.path-summary{font-size:var(--fs-xs)}}
+
+/* ---------- Historial por NFT (v5) */
+.history{display:grid;gap:8px}
+.history-table{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
+.history-table th{text-align:left;color:var(--muted);font-weight:600;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.08em;padding:4px 6px;border-bottom:1px solid var(--line)}
+.history-table td{padding:5px 6px;border-bottom:1px solid var(--line)}
+.history-table tr.current td{font-weight:600}

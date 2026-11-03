@@ -23,7 +23,29 @@ Part of the [MuSecure](https://github.com/Fsk8/MuSecure-Core-Functions) ecosyste
 | **Carries credentials / access rights** | Non-exclusive licenses are on-chain credentials (`has_lease`), verifiable by anyone (a distributor, a label, a platform). Licensees get stems (WAV), MIDI and a license certificate. |
 | **Access rights that travel** | A **sealed project** is encrypted (Lighthouse) to the NFT's own address. Only the current owner can obtain the key. **Sell the NFT and the buyer can open it; the seller can't.** |
 | **Dynamic NFTs** | The cover is an SVG **generated on chain** from the beat's notes, with a level (1–10) and badges that evolve: Original/Remix, Remixed, Seed, Licensed, Popular, Earns royalties, 1 NEAR earned, Exclusive sold, Collaborative, Battle winner. Standard NEP-177 metadata, so any wallet or explorer sees it up to date. |
+| **History per NFT** | Every holder, the price they paid and what they earned as owner; what the NFT earned and paid to its authors (`get_beat_history`). See *Transfer & threat model*. |
 | **NEP-171** | Full NEP-171/177/178/181 implementation (`near-contract-standards` 5.29.1) plus NEP-199 payouts. |
+
+## Transfer & threat model: what moves with the NFT, and why the seller can't keep it
+
+Each beat NFT controls **its own account**: an EVM address that NEAR's MPC network derives from this contract and the path `beat-<id>` (Chain Signatures). The contract only asks the MPC network to sign for that address when the caller is the **current owner** (`sign_for_beat`). There is no key to hand over: control is "whoever `nft_token(id).owner_id` is right now", checked on every call.
+
+**What moves to the buyer on transfer** (`buy`, `nft_transfer`, `nft_transfer_call`, `nft_transfer_payout`): the right to sign as the beat's account (and with it its Monad balance and MuSecure certificate), the key to the sealed project, all future owner income, and price controls. **What doesn't move, by design:** owner income earned *before* the sale (already credited to the seller's account), the authors' balance and credits (they belong to the authors, like publishing), and non-exclusive licenses already sold.
+
+| # | How a seller could try to keep money or access | What stops it | Test |
+|---|---|---|---|
+| 1 | Keep earning after the sale | Income is split at the moment it arrives, using the current owner (`credit_income`). Calls to one contract run one at a time, so income lands either before or after the sale, never half-way. | `income_before_the_sale_stays_with_the_seller_after_it_goes_to_the_buyer` |
+| 2 | Take the authors' balance with the sale | It isn't the owner's: `claim` always pays the credited authors (and 20 % to the original), whoever holds the NFT. | `a_sale_in_the_middle_of_a_payout_does_not_change_who_gets_paid`, `a_payout_right_before_the_sale_is_also_safe` |
+| 3 | Re-list it or sell it again through an old marketplace approval | The sale clears the listing (`on_owner_change`) and the NEP-171 transfer clears every approval. | `the_sale_clears_listing_and_marketplace_approvals`, `the_seller_cannot_relist_after_the_sale` |
+| 4 | Sign with the beat's account after selling | `sign_for_beat` checks the current owner on every call. | `the_seller_cannot_sign_with_the_beat_account_after_the_sale` |
+| 5 | Ask for a signature right before selling, so it arrives after the buyer owns it (the MPC answer is asynchronous) | The account **cannot sign while the NFT is listed**, and the NFT **cannot be listed or sold within 10 minutes of a signature** (`SIGN_SETTLE_MS`). | `the_beat_account_cannot_sign_while_listed`, `a_fresh_signature_blocks_listing`, `listing_is_allowed_once_signatures_settle` |
+| 6 | Pre-sign an EVM transaction from the beat's account and broadcast it after the sale | Every signature the account ever produced is logged on chain (`sign_for_beat` events, with the payload) and counted in the NFT's history, so a buyer can audit it before buying. After buying, the new owner can send one transaction from the account to use up its next nonce, which invalidates anything pre-signed. *(Limit: this needs the buyer to act; it isn't enforced by the contract.)* | history view |
+| 7 | Keep opening the sealed project | Every opening needs a fresh signature from the beat's account, which only the current owner can request. *(Limit: a copy the seller decrypted before selling can't be taken back.)* | `owner_seals_project_and_remixes_close`, sealing flow |
+| 8 | Undercut the buyer by selling new licenses | A transfer closes new non-exclusive licenses for good (`exclusive_sold`); nobody can reopen them. | `the_buyer_cannot_be_undercut_with_new_licenses_by_the_seller` |
+
+**History per NFT** (`get_beat_history`, and *Gallery → Details → History*): every holder with the date and the price they paid, what each one earned as owner, the total earned, what was paid to the authors and what is still waiting, and how many times the beat's account signed. Beats registered before v5 start their history with their creator and current owner.
+
+**Why not a NEAR sub-account per NFT?** A sub-account (`beat-4.musecure-beats-v2.testnet`) would have to change hands by rotating its full-access keys, which a seller could front-run or keep a copy of. A Chain Signatures account has no key at all: control follows the NFT owner by construction, and it works on any EVM chain. (We do use a NEAR sub-account where it fits: the critic, `critic.musecure-beats-v2.testnet`, holds only a function-call key.)
 
 ## Remix Battles + The Critic (Games)
 
@@ -70,6 +92,7 @@ The economy is the gameplay: a good seed earns from every remix and every prize 
 | Buy a non-exclusive license | _TODO_ |
 | Remix (pays the original) | _TODO_ |
 | Sell the NFT (`buy`) | _TODO_ |
+| History of an NFT (`get_beat_history`) | _TODO_ (view call) |
 | Distribute authors' balance (`claim`) | _TODO_ |
 | The Critic settles a Remix Battle (`settle_battle`, NEAR AI reviews + TEE signature) | [488sN4h6…](https://testnet.nearblocks.io/txns/488sN4h69ePHpVH44rDw7CWhyYQ1u5n5teuCDFKsjqN5) · [reviews & proof](https://gateway.lighthouse.storage/ipfs/bafkreiganvfv35omrxjx6ws34j6lfng5n24hesa36skzb7tfuwwupkrl24) |
 
@@ -143,7 +166,7 @@ flowchart LR
 
 - **Frontend:** React 18 + Vite 5, Tone.js 14. Drums are pre-rendered into samples for performance; exported WAVs are rendered offline (no glitches, full quality).
 - **Accounts:** Privy email login with NEAR embedded wallets (`@privy-io/react-auth` extended chains). New accounts are activated by a sponsor account; collaborators credited by email get pre-generated NEAR wallets.
-- **Contract:** Rust, `near-sdk` 5.29.1, 57 unit tests. Upgrades keep state (`migrate`).
+- **Contract:** Rust, `near-sdk` 5.29.1, 68 unit tests. Upgrades keep state (`migrate`).
 - **Storage:** WAV and project on IPFS (Lighthouse), SHA-256 hashes on chain. The Lighthouse key never reaches the browser.
 - **MuSecure bridge:** metadata in MuSecure's format, MuSecure's treasury funds the NFT's Monad address, MuSecure's backend signs the score (partner key), and NEAR's MPC network signs `registerWork` for the NFT.
 - **The Critic:** a Vercel function on a daily cron. It reads each entry's project from IPFS, computes features, calls NEAR AI Cloud's OpenAI-compatible API (`Qwen/Qwen3.6-35B-A3B-FP8`, private TEE), fetches the response signature, uploads everything to IPFS and settles on chain. About 4,500 tokens per battle (< $0.01). Without a NEAR AI key a deterministic test critic scores, so the game runs end to end in development.
@@ -160,6 +183,14 @@ flowchart LR
 - **Score 0 on MuSecure.** Beats registered from the sequencer skip MuSecure's catalog analysis; their metadata says so ("Catalog analysis: No").
 - **DAW plugin.** Beats export as MIDI (one track per instrument, General MIDI drums) for any DAW today; a VST3/AU/CLAP plugin that opens beats and licenses from NEAR is the next step.
 - **Testnet only.** Not audited.
+
+## Roadmap
+
+1. **DAW compatibility (main goal).** Producers live in their DAW, so MuSecure Beats should meet them there. Today: MIDI export (one track per instrument) and WAV stems for any DAW. Next: a lightweight plugin (VST3 / AU / CLAP) that registers and certifies what you make in the DAW and checks licenses, while signing stays in the browser so the plugin never holds keys.
+2. **Better sounds in the web app.** Every sound is synthesized in the browser today, which keeps the app light but limits the quality. The plan is to add high-quality sampled instruments — including our own recordings of Andean instruments — loaded on demand, plus a better mix chain, for a richer experience both when composing and when playing Remix Battles, while keeping a light mode for older computers.
+3. **The Monk that listens.** Judge the rendered audio, not only the project: tempo, space, dynamics and brightness measured from the WAV, plus sound-based similarity to the seed.
+4. **Near-copy detection.** A symbolic melodic fingerprint (intervals and relative rhythm per track) that recognises transposed or shifted melodies and suggests attribution.
+5. **Mainnet.** After an audit, with real prizes and royalties.
 
 ## Hackathon disclosure
 
@@ -192,7 +223,7 @@ pnpm dev                     # http://localhost:5173
 
 Without `VITE_PRIVY_APP_ID` the app runs read-only: you can make music and browse registered beats.
 
-**Tests:** `pnpm test` (JS: music logic, MIDI export, critic features) · `pnpm test:contract` (Rust, 57 tests). Agents and reviewers: see [AGENTS.md](AGENTS.md) for a code map and where each claim lives.
+**Tests:** `pnpm test` (JS: music logic, MIDI export, critic features) · `pnpm test:contract` (Rust, 68 tests). Agents and reviewers: see [AGENTS.md](AGENTS.md) for a code map and where each claim lives.
 
 **Contract:** see [contracts/beats/README.md](contracts/beats/README.md) (build with `cargo near build non-reproducible-wasm`, tests with `cargo test`).
 

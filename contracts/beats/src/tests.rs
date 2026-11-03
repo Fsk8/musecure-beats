@@ -572,7 +572,8 @@ fn set_caller_gas(caller: &str, deposit: NearToken, tgas: u64) {
         .signer_account_id(acc(caller))
         .attached_deposit(deposit)
         .prepaid_gas(Gas::from_tgas(tgas))
-        .account_balance(NearToken::from_near(100));
+        .account_balance(NearToken::from_near(100))
+        .block_timestamp(1_700_000_000_000_000_000);
     testing_env!(b.build());
 }
 
@@ -672,11 +673,11 @@ fn sealed_beat_cannot_reopen_remixes() {
 
 
 #[test]
-fn migrate_from_v3_keeps_beats() {
+fn migrate_from_v4_keeps_beats_and_battles() {
     let mut c = with_original(zero());
     set_caller("favio.testnet", zero());
     c.set_sealed_project("1".into(), "bafysealed".into());
-    let mut v3 = ContractV3 {
+    let mut v4 = ContractV4 {
         tokens: std::mem::replace(&mut c.tokens, NonFungibleToken::new(StorageKey::NonFungibleToken, acc("x.testnet"), Some(StorageKey::TokenMetadata), Some(StorageKey::Enumeration), Some(StorageKey::Approval))),
         metadata: LazyOption::new(StorageKey::Metadata, None),
         beats: std::mem::replace(&mut c.beats, LookupMap::new(StorageKey::Beats)),
@@ -687,17 +688,24 @@ fn migrate_from_v3_keeps_beats() {
         next_id: c.next_id,
         mpc_contract: acc(DEFAULT_MPC_CONTRACT),
         sealed: std::mem::replace(&mut c.sealed, LookupMap::new(StorageKey::Sealed)),
+        battles: LookupMap::new(StorageKey::Battles),
+        next_battle_id: 3,
+        critic: Some(acc("critic.testnet")),
+        battle_wins: LookupMap::new(StorageKey::BattleWins),
     };
-    v3.beats.flush();
-    v3.sealed.flush();
-    near_sdk::env::state_write(&v3);
+    v4.beats.flush();
+    v4.sealed.flush();
+    near_sdk::env::state_write(&v4);
     set_caller("beats.testnet", zero());
     let migrated = Contract::migrate();
     let b = migrated.get_beat("1".into()).unwrap();
     assert_eq!(b.title, "Original");
     assert_eq!(b.sealed_cid.as_deref(), Some("bafysealed"));
-    assert!(migrated.get_battles(None).is_empty());
-    assert!(migrated.get_critic().is_none());
+    assert_eq!(migrated.get_critic(), Some(acc("critic.testnet")));
+    // Historial de un beat anterior a la v5: arranca con su creador.
+    let h = migrated.get_beat_history("1".into());
+    assert_eq!(h.holders.len(), 1);
+    assert_eq!(h.holders[0].account_id, acc("favio.testnet"));
 }
 
 // ---------- Remix Battles
@@ -859,4 +867,163 @@ fn cannot_fund_after_close() {
     let mut c = with_battle();
     at("fan.testnet", near(1), T0 + 1000);
     c.fund_battle(0);
+}
+
+// ---------- Transferencia: modelo de amenazas (v5)
+// Cada test es una forma en que un vendedor podría intentar quedarse con dinero o acceso.
+
+const MIN10: u64 = 10 * 60 * 1000;
+
+/// Favio pone el beat 1 a la venta en T0 y Ana lo compra; devuelve el contrato.
+fn sold_to_ana() -> Contract {
+    let mut c = with_original(zero());
+    at("favio.testnet", zero(), T0);
+    c.list_for_sale("1".into(), Some(near(10)));
+    at("ana.testnet", near(10), T0 + 1);
+    c.buy("1".into());
+    c
+}
+
+#[test]
+fn income_before_the_sale_stays_with_the_seller_after_it_goes_to_the_buyer() {
+    let mut c = with_original(zero());
+    at("fan.testnet", near(2), T0 - 5);
+    c.support("1".into()); // antes de la venta: 1 NEAR para Favio (dueño)
+    at("favio.testnet", zero(), T0);
+    c.list_for_sale("1".into(), Some(near(10)));
+    at("ana.testnet", near(10), T0 + 1);
+    c.buy("1".into());
+    at("fan.testnet", near(4), T0 + 2);
+    c.support("1".into()); // después: 2 NEAR para Ana
+    assert_eq!(c.get_owner_earnings(acc("favio.testnet")), near(1));
+    assert_eq!(c.get_owner_earnings(acc("ana.testnet")), near(2));
+    let h = c.get_beat_history("1".into());
+    assert_eq!(h.holders.iter().map(|x| x.account_id.to_string()).collect::<Vec<_>>(), vec!["favio.testnet", "ana.testnet"]);
+    assert_eq!(h.holders[0].earned, near(1));
+    assert_eq!(h.holders[1].earned, near(2));
+    assert_eq!(h.holders[1].price, Some(near(10)));
+    assert_eq!(h.owners_earned, near(3));
+}
+
+#[test]
+fn a_sale_in_the_middle_of_a_payout_does_not_change_who_gets_paid() {
+    // Ingreso → venta → reparto: los autores cobran lo acumulado, el vendedor no toca ese saldo.
+    let mut c = with_original(zero());
+    at("fan.testnet", near(2), T0 - 5);
+    c.support("1".into()); // 1 NEAR al saldo de autores
+    at("favio.testnet", zero(), T0);
+    c.list_for_sale("1".into(), Some(near(10)));
+    at("ana.testnet", near(10), T0 + 1);
+    c.buy("1".into()); // + 1 NEAR de regalía al saldo de autores
+    assert_eq!(c.get_beat("1".into()).unwrap().authors_balance, near(2));
+    at("cualquiera.testnet", zero(), T0 + 2);
+    assert_eq!(c.claim("1".into()), near(2));
+    // 60 % Favio, 40 % Ingrid (créditos): la venta no cambia los autores.
+    let t = transfers();
+    assert!(t.contains(&("favio.testnet".to_string(), milli(1200).as_yoctonear())));
+    assert!(t.contains(&("ingrid.testnet".to_string(), milli(800).as_yoctonear())));
+    assert!(!t.iter().any(|(to, _)| to == "ana.testnet"));
+    let h = c.get_beat_history("1".into());
+    assert_eq!(h.authors_paid, near(2));
+    assert_eq!(h.authors_pending, zero());
+}
+
+#[test]
+fn a_payout_right_before_the_sale_is_also_safe() {
+    // Ingreso → reparto → venta: nada queda "en el aire" para el vendedor.
+    let mut c = with_original(zero());
+    at("fan.testnet", near(2), T0 - 5);
+    c.support("1".into());
+    at("cualquiera.testnet", zero(), T0 - 4);
+    c.claim("1".into());
+    at("favio.testnet", zero(), T0);
+    c.list_for_sale("1".into(), Some(near(10)));
+    at("ana.testnet", near(10), T0 + 1);
+    c.buy("1".into());
+    let v = c.get_beat("1".into()).unwrap();
+    assert_eq!(v.owner_id, acc("ana.testnet"));
+    assert_eq!(v.authors_balance, near(1)); // solo la regalía de la venta
+}
+
+#[test]
+fn the_sale_clears_listing_and_marketplace_approvals() {
+    let mut c = with_original(zero());
+    at("favio.testnet", near(1), T0);
+    c.nft_approve("1".into(), acc("market.testnet"), None);
+    assert!(c.nft_is_approved("1".into(), acc("market.testnet"), None));
+    at("favio.testnet", zero(), T0);
+    c.list_for_sale("1".into(), Some(near(10)));
+    at("ana.testnet", near(10), T0 + 1);
+    c.buy("1".into());
+    assert!(!c.nft_is_approved("1".into(), acc("market.testnet"), None));
+    assert_eq!(c.get_beat("1".into()).unwrap().sale_price, None);
+}
+
+#[test]
+#[should_panic(expected = "Only the NFT owner")]
+fn the_seller_cannot_relist_after_the_sale() {
+    let mut c = sold_to_ana();
+    at("favio.testnet", zero(), T0 + 2);
+    c.list_for_sale("1".into(), Some(near(1)));
+}
+
+#[test]
+#[should_panic(expected = "Only the NFT owner")]
+fn the_seller_cannot_sign_with_the_beat_account_after_the_sale() {
+    let mut c = sold_to_ana();
+    set_caller_gas("favio.testnet", NearToken::from_yoctonear(1), 300);
+    let _ = c.sign_for_beat("1".into(), HASH_A.into());
+}
+
+#[test]
+#[should_panic(expected = "Unlist the NFT before signing")]
+fn the_beat_account_cannot_sign_while_listed() {
+    let mut c = with_original(zero());
+    at("favio.testnet", zero(), T0);
+    c.list_for_sale("1".into(), Some(near(10)));
+    set_caller_gas("favio.testnet", NearToken::from_yoctonear(1), 300);
+    let _ = c.sign_for_beat("1".into(), HASH_A.into());
+}
+
+#[test]
+#[should_panic(expected = "signed less than 10 minutes ago")]
+fn a_fresh_signature_blocks_listing() {
+    // Firmar y vender enseguida: la firma de la red MPC podría llegar ya con otro dueño.
+    let mut c = with_original(zero());
+    set_caller_gas("favio.testnet", NearToken::from_yoctonear(1), 300); // firma en T0
+    let _ = c.sign_for_beat("1".into(), HASH_A.into());
+    at("favio.testnet", zero(), T0 + 60_000);
+    c.list_for_sale("1".into(), Some(near(10)));
+}
+
+#[test]
+fn listing_is_allowed_once_signatures_settle() {
+    let mut c = with_original(zero());
+    set_caller_gas("favio.testnet", NearToken::from_yoctonear(1), 300);
+    let _ = c.sign_for_beat("1".into(), HASH_A.into());
+    at("favio.testnet", zero(), T0 + MIN10);
+    c.list_for_sale("1".into(), Some(near(10)));
+    let h = c.get_beat_history("1".into());
+    assert_eq!(h.signatures, 1);
+    assert_eq!(h.last_sign_ms, U64(T0));
+}
+
+#[test]
+#[should_panic(expected = "The exclusive was already sold")]
+fn the_buyer_cannot_be_undercut_with_new_licenses_by_the_seller() {
+    // Al cambiar de dueño se cierran las licencias nuevas; nadie puede reabrirlas.
+    let mut c = sold_to_ana();
+    at("ana.testnet", zero(), T0 + 2);
+    c.set_lease_price("1".into(), near(1));
+}
+
+#[test]
+fn a_gift_is_recorded_without_a_price() {
+    let mut c = with_original(zero());
+    at("favio.testnet", NearToken::from_yoctonear(1), T0);
+    c.nft_transfer(acc("ana.testnet"), "1".into(), None, None);
+    let h = c.get_beat_history("1".into());
+    assert_eq!(h.holders.len(), 2);
+    assert_eq!(h.holders[1].price, None);
+    assert_eq!(h.holders[1].since_ms, U64(T0));
 }

@@ -36,6 +36,8 @@ use near_sdk::{
 };
 
 mod battles;
+mod ledger;
+use ledger::Ledger;
 mod dynamic;
 use battles::Battle;
 use dynamic::{beat_path, svg, svg_data_uri, validate_art, Stats};
@@ -76,6 +78,7 @@ enum StorageKey {
     Sealed,
     Battles,
     BattleWins,
+    Ledger,
 }
 
 /// A quién va una parte de los ingresos de autoría: una cuenta o otro beat (el original de un remix).
@@ -239,11 +242,13 @@ pub struct Contract {
     critic: Option<AccountId>,
     /// Batallas ganadas (1er lugar) por cada beat: insignia y nivel.
     battle_wins: LookupMap<TokenId, u32>,
+    /// Historial por NFT (v5): dueños, lo que ganó cada uno, lo pagado a autores, firmas.
+    ledger: LookupMap<TokenId, Ledger>,
 }
 
-/// Estado de la v3 (antes de las Remix Battles), para migrar sin perder beats.
+/// Estado de la v4 (antes del historial por NFT), para migrar sin perder beats.
 #[near(serializers = [borsh])]
-struct ContractV3 {
+struct ContractV4 {
     tokens: NonFungibleToken,
     metadata: LazyOption<NFTContractMetadata>,
     beats: LookupMap<TokenId, Beat>,
@@ -254,6 +259,10 @@ struct ContractV3 {
     next_id: u64,
     mpc_contract: AccountId,
     sealed: LookupMap<TokenId, String>,
+    battles: LookupMap<u64, Battle>,
+    next_battle_id: u64,
+    critic: Option<AccountId>,
+    battle_wins: LookupMap<TokenId, u32>,
 }
 
 #[near]
@@ -290,14 +299,15 @@ impl Contract {
             next_battle_id: 0,
             critic: None,
             battle_wins: LookupMap::new(StorageKey::BattleWins),
+            ledger: LookupMap::new(StorageKey::Ledger),
         }
     }
 
-    /// Migra el estado de la v3 agregando las Remix Battles. Lo llama el propio contrato al actualizarse.
+    /// Migra el estado de la v4 agregando el historial por NFT. Lo llama el propio contrato al actualizarse.
     #[private]
     #[init(ignore_state)]
     pub fn migrate() -> Self {
-        let old: ContractV3 = env::state_read().unwrap_or_else(|| env::panic_str("No v3 state to migrate"));
+        let old: ContractV4 = env::state_read().unwrap_or_else(|| env::panic_str("No v4 state to migrate"));
         Self {
             tokens: old.tokens,
             metadata: old.metadata,
@@ -309,10 +319,11 @@ impl Contract {
             next_id: old.next_id,
             mpc_contract: old.mpc_contract,
             sealed: old.sealed,
-            battles: LookupMap::new(StorageKey::Battles),
-            next_battle_id: 0,
-            critic: None,
-            battle_wins: LookupMap::new(StorageKey::BattleWins),
+            battles: old.battles,
+            next_battle_id: old.next_battle_id,
+            critic: old.critic,
+            battle_wins: old.battle_wins,
+            ledger: LookupMap::new(StorageKey::Ledger),
         }
     }
 
@@ -373,10 +384,15 @@ impl Contract {
             "Only the NFT owner can sign for the beat account"
         );
         require!(
+            self.beat(&token_id).sale_price.is_none(),
+            "Unlist the NFT before signing with its account (protects buyers)"
+        );
+        require!(
             payload.len() == 64 && payload.chars().all(|c| c.is_ascii_hexdigit()),
             "payload: must be 32 bytes in hex"
         );
         require!(env::prepaid_gas() >= Gas::from_tgas(250), "Attach at least 250 Tgas");
+        self.record_signature(&token_id);
         log_event(
             "sign_for_beat",
             &format!(r#"{{"token_id":"{}","path":"{}","payload":"{}"}}"#, token_id, beat_path(&token_id), payload.to_lowercase()),
@@ -462,6 +478,7 @@ impl Contract {
 
         // El redondeo (unos pocos yocto) queda en el saldo del beat.
         self.beat_mut(&token_id).authors_balance = NearToken::from_yoctonear(balance - distributed);
+        self.record_authors_paid(&token_id, distributed);
         log_event("claim", &format!(r#"{{"token_id":"{}","amount":"{}"}}"#, token_id, distributed));
         NearToken::from_yoctonear(distributed)
     }
@@ -527,6 +544,7 @@ impl Contract {
         self.assert_owner(&token_id);
         if let Some(p) = price {
             require!(p > NearToken::from_yoctonear(0), "The price must be greater than 0");
+            self.assert_signatures_settled(&token_id);
         }
         self.beat_mut(&token_id).sale_price = price;
     }
@@ -540,6 +558,7 @@ impl Contract {
         let price = self.beat(&token_id).sale_price.unwrap_or_else(|| env::panic_str("This beat is not for sale"));
         require!(buyer != seller, "You already own this beat");
         require!(attached >= price, format!("The price is {} yoctoNEAR", price.as_yoctonear()));
+        self.assert_signatures_settled(&token_id);
 
         let royalty = NearToken::from_yoctonear(price.as_yoctonear() * RESALE_ROYALTY_BPS as u128 / BPS as u128);
         {
@@ -549,6 +568,7 @@ impl Contract {
         }
         self.on_owner_change(&token_id);
         self.tokens.internal_transfer(&seller, &buyer, &token_id, None, Some("Purchase on MuSecure Beats".into()));
+        self.record_holder(&token_id, &buyer, Some(price));
 
         let _ = Promise::new(seller.clone()).transfer(price.saturating_sub(royalty));
         let change = attached.saturating_sub(price);
@@ -645,9 +665,11 @@ impl Contract {
         max_len_payout: Option<u32>,
     ) -> Payout {
         assert_one_yocto();
+        self.assert_signatures_settled(&token_id);
         let payout = self.nft_payout(token_id.clone(), balance, max_len_payout);
         self.on_owner_change(&token_id);
         self.tokens.internal_transfer(&env::predecessor_account_id(), &receiver_id, &token_id, approval_id, memo);
+        self.record_holder(&token_id, &receiver_id, Some(NearToken::from_yoctonear(balance.0)));
         payout
     }
 
@@ -690,7 +712,8 @@ impl Contract {
         let authors_part = amount.saturating_sub(owner_part);
 
         let current = self.get_owner_earnings(owner.clone());
-        self.owner_earnings.insert(owner, current.saturating_add(owner_part));
+        self.owner_earnings.insert(owner.clone(), current.saturating_add(owner_part));
+        self.record_owner_income(token_id, &owner, owner_part);
 
         let beat = self.beat_mut(token_id);
         beat.authors_balance = beat.authors_balance.saturating_add(authors_part);
@@ -797,6 +820,7 @@ impl Contract {
             ids.push(token_id.clone());
             self.by_fingerprint.insert(f, ids);
         }
+        self.ledger_mut(&token_id); // historial: empieza con el creador
         self.view(&token_id).unwrap()
     }
 
@@ -1005,8 +1029,9 @@ fn log_event(event: &str, data: &str) {
 impl NonFungibleTokenCore for Contract {
     #[payable]
     fn nft_transfer(&mut self, receiver_id: AccountId, token_id: TokenId, approval_id: Option<u64>, memo: Option<String>) {
-        self.tokens.nft_transfer(receiver_id, token_id.clone(), approval_id, memo);
+        self.tokens.nft_transfer(receiver_id.clone(), token_id.clone(), approval_id, memo);
         self.on_owner_change(&token_id);
+        self.record_holder(&token_id, &receiver_id, None);
     }
 
     #[payable]
@@ -1037,7 +1062,11 @@ impl NonFungibleTokenResolver for Contract {
         token_id: TokenId,
         approved_account_ids: Option<HashMap<AccountId, u64>>,
     ) -> bool {
-        self.tokens.nft_resolve_transfer(previous_owner_id, receiver_id, token_id, approved_account_ids)
+        let kept = self.tokens.nft_resolve_transfer(previous_owner_id, receiver_id.clone(), token_id.clone(), approved_account_ids);
+        if kept {
+            self.record_holder(&token_id, &receiver_id, None);
+        }
+        kept
     }
 }
 

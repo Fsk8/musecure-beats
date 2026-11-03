@@ -16,6 +16,8 @@ export const hasLease = (provider, tokenId, accountId) =>
   provider.callFunction(CONTRACT_ID, 'has_lease', { token_id: tokenId, account_id: accountId });
 export const getOwnerEarnings = (provider, accountId) =>
   provider.callFunction(CONTRACT_ID, 'get_owner_earnings', { account_id: accountId });
+/** Historial del NFT (v5): dueños, lo que ganó cada uno, lo pagado a autores, firmas de su cuenta. */
+export const getBeatHistory = (provider, tokenId) => provider.callFunction(CONTRACT_ID, 'get_beat_history', { token_id: tokenId });
 export const getBeatMedia = (provider, tokenId) => provider.callFunction(CONTRACT_ID, 'beat_media', { token_id: tokenId });
 export const getTotalBeats = (provider) => provider.callFunction(CONTRACT_ID, 'total_beats', {});
 

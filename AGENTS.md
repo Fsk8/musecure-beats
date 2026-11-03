@@ -15,7 +15,7 @@ A browser beat sequencer where each beat can be registered as an NFT on NEAR tha
 ```bash
 pnpm install
 pnpm test            # JS unit tests (node:test, no network): music logic, MIDI export, critic features
-pnpm test:contract   # Rust contract tests (cargo test, 57 tests): money flows, licenses, battles, migration
+pnpm test:contract   # Rust contract tests (cargo test, 68 tests): money flows, licenses, battles, migration
 pnpm dev             # app on http://localhost:5173 (read-only without VITE_PRIVY_APP_ID)
 pnpm build
 ```
@@ -28,6 +28,7 @@ Contract build/deploy: `contracts/beats/README.md` (`cargo near build non-reprod
 |---|---|
 | `contracts/beats/src/lib.rs` | NEP-171 NFT + credits, royalties, licenses, sales, sealing, Chain Signatures |
 | `contracts/beats/src/battles.rs` | Remix Battles: create, fund, settle (critic only) |
+| `contracts/beats/src/ledger.rs` | History per NFT and buyer protections (v5) |
 | `contracts/beats/src/dynamic.rs` | On-chain SVG cover, level and badges |
 | `contracts/beats/src/tests.rs` | Contract unit tests |
 | `api/` | Vercel functions: account activation, IPFS upload, collaborator wallets by email, MuSecure bridge (`musecure-*`), sealing (`seal-*`), the critic (`critic-run`) |
@@ -54,6 +55,8 @@ Contract build/deploy: `contracts/beats/README.md` (`cargo near build non-reprod
 | The critic must score every entry; prizes 50/30/20 are paid as income of the winning NFTs | `battles.rs` `settle_battle` |
 | The critic cannot move funds | `battles.rs` `settle_battle` takes no deposit; its key is a function-call key restricted to `settle_battle` (`contracts/beats/README.md`) |
 | The Monk's reviews are signed by NEAR AI (TEE) and published with request/response | `api/_lib/critic.js` `nearAiReviews`, `judgeBattle` |
+| Control of the NFT's account and access moves on transfer; the seller can't keep them | `lib.rs` `sign_for_beat`, `buy`, `on_owner_change`; `ledger.rs` `assert_signatures_settled` (threat model in README) |
+| History per NFT: holders, prices, earned, paid to authors, signatures | `ledger.rs` `get_beat_history`, `record_holder`, `record_owner_income` |
 | Exact duplicate audio is detected before registering | `lib.rs` `get_beats_by_fingerprint`; `src/components/RegisterPanel.jsx` (duplicate warning) |
 
 Live transactions: the "Live proof" table in `README.md`.

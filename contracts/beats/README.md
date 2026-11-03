@@ -162,3 +162,16 @@ near contract call-function as-transaction musecure-beats-v2.testnet create_batt
   json-args '{"seed_id":"1","title":"Week 1","rules":"Keep the bassline, change the drums","starts_ms":"<ms>","ends_ms":"<ms>"}' \
   prepaid-gas '30 Tgas' attached-deposit '1 NEAR' sign-as <ADMIN> network-config testnet sign-with-keychain send
 ```
+
+## v5: history per NFT and buyer protections
+
+Upgrade from v4 (keeps state):
+
+```bash
+cargo near build non-reproducible-wasm
+near contract deploy musecure-beats-v2.testnet use-file target/near/musecure_beats_contract.wasm \
+  with-init-call migrate json-args '{}' prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' \
+  network-config testnet sign-with-keychain send
+```
+
+New: `get_beat_history(token_id)`; `sign_for_beat` is refused while the NFT is listed; listing and selling are refused within 10 minutes of a signature.

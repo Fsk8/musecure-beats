@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Panel } from './Panel';
 import { useNear } from '../near/NearProvider';
-import { getBeatMedia, getBeats, hasLease, yoctoToNear } from '../near/contract';
+import { getBeatHistory, getBeatMedia, getBeats, hasLease, yoctoToNear } from '../near/contract';
 import { CONTRACT_ID, explorerAccountUrl, explorerNftUrl, explorerTokenUrl, explorerTxUrl, shortAccount } from '../near/config';
 import { fetchIpfs, ipfsUrl } from '../near/ipfs';
 import { nearToYocto, payContract, sha256Hex } from '../near/register';
@@ -299,9 +299,13 @@ function AnchorBox({ beat: b }) {
       {registered === true && <span className="ok-text">✓ Registered on MuSecure (Monad) under the NFT account</span>}
       {registered === false && !mine && <span className="hint">Not registered on MuSecure yet.</span>}
       {registered === false && mine && status === 'active' && (
-        <button onClick={anchor} disabled={Boolean(step)} title="Sign the MuSecure (Monad) registration from the NFT account, via Chain Signatures">
-          {step || 'Register on MuSecure from the NFT account'}
-        </button>
+        b.sale_price
+          ? <span className="hint">The NFT is listed for sale: unlist it to sign with its account (this protects buyers).</span>
+          : (
+            <button onClick={anchor} disabled={Boolean(step)} title="Sign the MuSecure (Monad) registration from the NFT account, via Chain Signatures">
+              {step || 'Register on MuSecure from the NFT account'}
+            </button>
+          )
       )}
       {result && (
         <span className="hint">
@@ -311,6 +315,53 @@ function AnchorBox({ beat: b }) {
         </span>
       )}
       {error && <span className="hint warn-text">{error}</span>}
+    </div>
+  );
+}
+
+/**
+ * Historial del NFT: quién lo tuvo (y cuánto ganó cada dueño), cuánto ganó el beat, cuánto se pagó a los
+ * autores y cuántas veces firmó su cuenta propia. Todo sale del contrato (get_beat_history).
+ */
+function BeatHistory({ beat: b }) {
+  const { provider } = useNear();
+  const [h, setH] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let alive = true;
+    getBeatHistory(provider, b.token_id).then((x) => alive && setH(x)).catch((e) => alive && setError(e?.message || String(e)));
+    return () => { alive = false; };
+  }, [provider, b.token_id, b.owner_id, b.total_earned, b.authors_balance]);
+  if (error) return <p className="hint">History not available yet (the contract may be on an older version).</p>;
+  if (!h) return <p className="hint">Loading history…</p>;
+  const n = (y) => `${yoctoToNear(y, 3)} NEAR`;
+  const day = (ms) => (Number(ms) ? new Date(Number(ms)).toLocaleDateString() : 'before history');
+  return (
+    <div className="history">
+      <div className="stats">
+        <div className="stat"><span className="label">Earned</span><strong>{n(h.total_earned)}</strong></div>
+        <div className="stat"><span className="label">Paid to owners</span><strong>{n(h.owners_earned)}</strong></div>
+        <div className="stat"><span className="label">Paid to authors</span><strong>{n(h.authors_paid)}</strong></div>
+        <div className="stat"><span className="label">Waiting for authors</span><strong>{n(h.authors_pending)}</strong></div>
+      </div>
+      <table className="history-table">
+        <thead><tr><th>Holder</th><th>Since</th><th>Paid</th><th>Earned as owner</th></tr></thead>
+        <tbody>
+          {h.holders.map((x, i) => (
+            <tr key={`${x.account_id}-${i}`} className={i === h.holders.length - 1 ? 'current' : ''}>
+              <td><Account id={x.account_id} />{i === h.holders.length - 1 ? ' · current' : ''}</td>
+              <td>{day(x.since_ms)}</td>
+              <td>{x.price ? n(x.price) : i === 0 ? 'minted' : '—'}</td>
+              <td>{n(x.earned)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="hint">
+        The NFT's own account signed {h.signatures} time{h.signatures === 1 ? '' : 's'}
+        {Number(h.last_sign_ms) ? `, last on ${new Date(Number(h.last_sign_ms)).toLocaleString()}` : ''}. Every signature is logged on chain
+        (<code>sign_for_beat</code> events), so a buyer can see what it signed before buying.
+      </p>
     </div>
   );
 }
@@ -642,6 +693,8 @@ function BeatCard({ beat: b, playing, onPlay, onOpen, onChanged, onRenderStems, 
           <VerifyLicense beat={b} />
           <span className="label">Credits</span>
           <CreditsView credits={b.credits} />
+          <span className="label">History</span>
+          <BeatHistory beat={b} />
           <ClaimBox beat={b} onChanged={onChanged} />
           <span className="label">Fingerprints</span>
           <Hash label="Audio SHA-256" value={b.audio_hash} />
