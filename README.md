@@ -1,13 +1,20 @@
 # MuSecure Beats
 
-**Make a beat in your browser. Mint it as an NFT that owns money, earns cascading royalties, holds its own account on another chain, and keeps its source sealed — and when the NFT is sold, all of that moves to the buyer. Then remix the weekly seed and let an AI critic on NEAR AI decide who takes the prize.**
+**An NFT that is an account.** Make a beat in your browser and mint it on NEAR. The NFT holds its own money, pays royalties up its remix tree, controls its own address on another chain (Chain Signatures) and keeps its source sealed. When it's sold, all of that moves to the buyer, and the contract makes sure the seller can't keep any of it.
 
-Built for the NEAR Hackathon (Nov 2026) · Tracks: **NFTs That Do Something** · **Games** · **Open**
-Part of the [MuSecure](https://github.com/Fsk8/MuSecure-Core-Functions) ecosystem (music authorship on Monad), by Favio & Ingrid — Cochabamba, Bolivia.
+<!-- GIF: sequencer → register → gallery cover (docs/demo.gif) -->
 
-- **Live app:** https://musecure-beats.vercel.app
-- **Contract (NEAR testnet):** [`musecure-beats-v2.testnet`](https://testnet.nearblocks.io/address/musecure-beats-v2.testnet)
-- **Demo video:** _TODO_
+| ▶ [Live app](https://musecure-beats.vercel.app) | 📜 [Contract `musecure-beats-v2.testnet`](https://testnet.nearblocks.io/address/musecure-beats-v2.testnet) | 🎬 Demo video: _TODO_ |
+|---|---|---|
+
+**In 30 seconds:**
+- **Main track: NFTs That Do Something.** Each beat NFT owns money, earns cascading royalties, carries licenses as credentials, and has its own EVM account that only the current owner can make sign.
+- **The transfer is the hard part, and it's tested.** 8 ways a seller could try to keep money or access, each one blocked in the contract and covered by a test ([threat model](#transfer--threat-model-what-moves-with-the-nft-and-why-the-seller-cant-keep-it)).
+- **And also (Games):** weekly Remix Battles judged by The Monk, an AI critic on NEAR AI Cloud (private TEE) whose signed reviews move real prizes, with a key that can only call `settle_battle`.
+- **Checkable:** every claim maps to code in [AGENTS.md](AGENTS.md); live transactions are in [Live proof](#live-proof-testnet); limits are stated in [Honest limits](#honest-limits-and-next-steps).
+
+Built for the NEAR Hackathon (Nov 2026) · Main track **NFTs That Do Something** · also **Games**, **Open**.
+Part of the [MuSecure](https://github.com/Fsk8/MuSecure-Core-Functions) ecosystem (music authorship on Monad), by Favio & Ingrid, Cochabamba, Bolivia.
 
 ---
 
@@ -47,17 +54,17 @@ Each beat NFT controls **its own account**: an EVM address that NEAR's MPC netwo
 
 **Why not a NEAR sub-account per NFT?** A sub-account (`beat-4.musecure-beats-v2.testnet`) would have to change hands by rotating its full-access keys, which a seller could front-run or keep a copy of. A Chain Signatures account has no key at all: control follows the NFT owner by construction, and it works on any EVM chain. (We do use a NEAR sub-account where it fits: the critic, `critic.musecure-beats-v2.testnet`, holds only a function-call key.)
 
-## Remix Battles + The Critic (Games)
+## Remix Battles + The Monk (Games)
 
 Every week there is a **seed beat**. Players remix it in the browser; every open remix of the seed registered inside the battle window is an entry. Anyone can add NEAR to the prize pool.
 
-When the battle closes, **The Critic** — an NPC agent running on **NEAR AI Cloud** (private TEE inference) — reads every entry's project, computes musical features (key, tempo, density, syncopation, how much of the seed it kept and which tracks it changed) and writes a score and a review for each one. NEAR AI signs the model's response; the reviews, the exact request and response, and that signature are published on IPFS so anyone can check them.
+When the battle closes, **The Monk**, an AI critic (NPC agent) running on **NEAR AI Cloud** (private TEE inference), reads every entry's project, computes musical features (key, tempo, density, syncopation, how much of the seed it kept and which tracks it changed) and writes a score and a review for each one. NEAR AI signs the model's response; the reviews, the exact request and response, and that signature are published on IPFS so anyone can check them.
 
-The Critic then calls `settle_battle` with a **function-call key that can only call that method** — it can rank entries, it can't move money anywhere. The contract checks that every entry was scored, ranks them and pays **50 / 30 / 20 %** of the pool as **income of the winning NFTs**: half to their owners, half to their authors, and 20 % of the authors' part flows up to the seed. The winner earns the **Battle winner** badge and +2 levels on its on-chain cover.
+The Monk then calls `settle_battle` with a **function-call key that can only call that method** — it can rank entries, it can't move money anywhere. The contract checks that every entry was scored, ranks them and pays **50 / 30 / 20 %** of the pool as **income of the winning NFTs**: half to their owners, half to their authors, and 20 % of the authors' part flows up to the seed. The winner earns the **Battle winner** badge and +2 levels on its on-chain cover.
 
 The economy is the gameplay: a good seed earns from every remix and every prize its remixes win.
 
-**Why it's an NPC, not a script.** The Critic has a persona ("demanding but fair"), judges against the week's rules, and writes reviews tied to the numbers — e.g. *"You nailed the rule by keeping the bassline intact while gutting the drums down to a mere 6 % retention, then slapped on a 105 BPM tempo and 7 % swing to reshape the pocket."* Its judgement moves real money.
+**Why it's an NPC, not a script.** The Monk has a persona ("demanding but fair"), judges against the week's rules, and writes reviews tied to the numbers — e.g. *"You nailed the rule by keeping the bassline intact while gutting the drums down to a mere 6 % retention, then slapped on a 105 BPM tempo and 7 % swing to reshape the pocket."* Its judgement moves real money.
 
 **Verify a battle yourself.** Each battle's `review_cid` (on chain, `get_battle`) points to a JSON with every review, the exact request sent to the model, the raw response, and NEAR AI's signature. The signed text is `<model>:<sha256(request)>:<sha256(response)>`; recover the signer with EIP-191 and check it against the TEE attestation report at `https://cloud-api.near.ai/v1/attestation/report?model=<model>&signing_algo=ecdsa`.
 
@@ -80,21 +87,21 @@ The economy is the gameplay: a good seed earns from every remix and every prize 
 6. **From a second account:** buy a non-exclusive license (badge "Licensed" appears), download the **stems** and the **license certificate**, or **Remix** the beat — the app shows how much of the original you kept (≥ 30 % → it's a remix and pays the remix license).
 7. **Owner controls → List for sale. Second account → Buy NFT.** The authors get 10 %; the buyer now controls the NFT's Monad account and can **open the sealed project**, while the seller no longer can.
 8. **My earnings.** Owner earnings to withdraw, the money sitting inside each NFT, and one-click **Distribute** to the authors.
-9. **Battles.** Open the current battle: listen to the seed, read the rules, press **Remix the seed**, change it and register it as **Open** before the deadline — it enters automatically. Add NEAR to the prize if you like. After the deadline The Critic judges: the battle shows the ranking, every review, the prizes and the link to the signed proof. The winner's cover gets the **Battle winner** badge.
+9. **Battles.** Open the current battle: listen to the seed, read the rules, press **Remix the seed**, change it and register it as **Open** before the deadline — it enters automatically. Add NEAR to the prize if you like. After the deadline The Monk judges: the battle shows the ranking, every review, the prizes and the link to the signed proof. The winner's cover gets the **Battle winner** badge.
 
 ## Live proof (testnet)
 
 | Step | Transaction |
 |---|---|
-| Register a beat | _TODO_ |
-| `sign_for_beat` → MuSecure certificate on Monad | NEAR: _TODO_ · Monad: _TODO_ |
-| Seal a project (`set_sealed_project`) | _TODO_ |
-| Buy a non-exclusive license | _TODO_ |
-| Remix (pays the original) | _TODO_ |
-| Sell the NFT (`buy`) | _TODO_ |
-| History of an NFT (`get_beat_history`) | _TODO_ (view call) |
-| Distribute authors' balance (`claim`) | _TODO_ |
-| The Critic settles a Remix Battle (`settle_battle`, NEAR AI reviews + TEE signature) | [488sN4h6…](https://testnet.nearblocks.io/txns/488sN4h69ePHpVH44rDw7CWhyYQ1u5n5teuCDFKsjqN5) · [reviews & proof](https://gateway.lighthouse.storage/ipfs/bafkreiganvfv35omrxjx6ws34j6lfng5n24hesa36skzb7tfuwwupkrl24) |
+| Register a beat | https://testnet.nearblocks.io/txns/J18MRbiwLXcjK6ZnPgNFTnkfrYgG2WHXBZg7NsWmxu59 |
+| `sign_for_beat` → MuSecure certificate on Monad | NEAR: https://testnet.nearblocks.io/txns/7To1Mh9Ceg6aWTMXTZSFMEghUWLPQQqDKgRRi9guKbfi · Monad: https://testnet.monadscan.com/tx/0xaa52d19709d9da88dd9b72b021742e78637c3e680fdd0935fc5972c71473ad1e |
+| Seal a project (`set_sealed_project`) | https://testnet.nearblocks.io/txns/CrvCd4yDcGW2nJuKBhyNZSR7MwxWrCEeyYBH96opBWQH |
+| Buy a non-exclusive license | https://testnet.nearblocks.io/txns/GrAraSPhPhVvr9EsuyVrxcn1ZrJrkGEU6W5vQkz2RyXf |
+| Remix (pays the original) | https://testnet.nearblocks.io/txns/5FbjD4YCWHd2KyVfxk6ez24BXJmbkDyhqQ5R2UGU28mB |
+| Sell the NFT (`buy`) | https://testnet.nearblocks.io/txns/5aiwo8ztkibnU3nrHdLADwXUjeHnmGwpPu4RoE9cvcoZ |
+| History of an NFT (`get_beat_history`, view) | Beat #37: minted by `dea379…`, bought by `29d4c4…` for 0.5 NEAR (date and price recorded on chain); 0.05 NEAR (10 %) held inside the NFT for its authors. Check it: `near view musecure-beats-v2.testnet get_beat_history '{"token_id":"37"}' --networkId testnet` · in the app: Gallery → #37 → Details → History |
+| Distribute authors' balance (`claim`) | https://testnet.nearblocks.io/txns/EDnUQMrvv9YQ9of6ZPzteShxhm3gn2CgukDcfceH6UQY |
+| The Monk settles a Remix Battle (`settle_battle`, NEAR AI reviews + TEE signature) | [488sN4h6…](https://testnet.nearblocks.io/txns/488sN4h69ePHpVH44rDw7CWhyYQ1u5n5teuCDFKsjqN5) · [reviews & proof](https://gateway.lighthouse.storage/ipfs/bafkreiganvfv35omrxjx6ws34j6lfng5n24hesa36skzb7tfuwwupkrl24) |
 
 ## Proof bundle: what each beat NFT proves
 
@@ -169,7 +176,7 @@ flowchart LR
 - **Contract:** Rust, `near-sdk` 5.29.1, 68 unit tests. Upgrades keep state (`migrate`).
 - **Storage:** WAV and project on IPFS (Lighthouse), SHA-256 hashes on chain. The Lighthouse key never reaches the browser.
 - **MuSecure bridge:** metadata in MuSecure's format, MuSecure's treasury funds the NFT's Monad address, MuSecure's backend signs the score (partner key), and NEAR's MPC network signs `registerWork` for the NFT.
-- **The Critic:** a Vercel function on a daily cron. It reads each entry's project from IPFS, computes features, calls NEAR AI Cloud's OpenAI-compatible API (`Qwen/Qwen3.6-35B-A3B-FP8`, private TEE), fetches the response signature, uploads everything to IPFS and settles on chain. About 4,500 tokens per battle (< $0.01). Without a NEAR AI key a deterministic test critic scores, so the game runs end to end in development.
+- **The Monk:** a Vercel function on a daily cron. It reads each entry's project from IPFS, computes features, calls NEAR AI Cloud's OpenAI-compatible API (`Qwen/Qwen3.6-35B-A3B-FP8`, private TEE), fetches the response signature, uploads everything to IPFS and settles on chain. About 4,500 tokens per battle (< $0.01). Without a NEAR AI key a deterministic test critic scores, so the game runs end to end in development.
 - **Audio fingerprint:** the same algorithm as MuSecure (ported unchanged), so the same audio produces the same fingerprint in both apps.
 
 ## Honest limits (and next steps)
@@ -178,7 +185,7 @@ flowchart LR
 - **Open projects are public.** For open beats, anyone could rebuild the stems from the public project; the license is the verifiable *right* to use them. Sealed beats protect the project but turn off remixes.
 - **Licensees can't open sealed projects automatically.** Lighthouse access conditions don't support NEAR yet; the next step is a NEAR-aware condition (or sharing per license, signed by the NFT).
 - **Exact copies are caught, near-copies aren't yet** (see *Proof bundle*). Every beat's MuSecure audio fingerprint is indexed on chain (`get_beats_by_fingerprint`); the app warns before registering an identical beat, and MuSecure on Monad refuses to certify a duplicate fingerprint. The 30 % remix similarity check runs in the app, so a lightly edited copy can still be registered as original; a signed similarity oracle is the next step.
-- **The Critic can't hear.** It judges features computed from the sequencer project, not the audio. LLM scoring isn't deterministic: re-judging can shift scores; the official result is the one settled on chain and published on IPFS. The critic server is trusted to run the model honestly — the TEE signature proves which model produced the reviews, and the contract limits what the critic can do with them.
+- **The Monk can't hear (yet).** It judges features computed from the sequencer project, not the audio. LLM scoring isn't deterministic: re-judging can shift scores; the official result is the one settled on chain and published on IPFS. The critic server is trusted to run the model honestly — the TEE signature proves which model produced the reviews, and the contract limits what the critic can do with them.
 - **Battles are created by the admin.** Anyone can fund and enter; opening battle creation to everyone needs a deposit and anti-spam rules.
 - **Score 0 on MuSecure.** Beats registered from the sequencer skip MuSecure's catalog analysis; their metadata says so ("Catalog analysis: No").
 - **DAW plugin.** Beats export as MIDI (one track per instrument, General MIDI drums) for any DAW today; a VST3/AU/CLAP plugin that opens beats and licenses from NEAR is the next step.
@@ -190,7 +197,10 @@ flowchart LR
 2. **Better sounds in the web app.** Every sound is synthesized in the browser today, which keeps the app light but limits the quality. The plan is to add high-quality sampled instruments — including our own recordings of Andean instruments — loaded on demand, plus a better mix chain, for a richer experience both when composing and when playing Remix Battles, while keeping a light mode for older computers.
 3. **The Monk that listens.** Judge the rendered audio, not only the project: tempo, space, dynamics and brightness measured from the WAV, plus sound-based similarity to the seed.
 4. **Near-copy detection.** A symbolic melodic fingerprint (intervals and relative rhythm per track) that recognises transposed or shifted melodies and suggests attribution.
-5. **Mainnet.** After an audit, with real prizes and royalties.
+5. **A blind sealing server.** Encrypt the project in the browser with a random key, wrap that key to the NFT's address, and have the server store only ciphertext. The server goes from "trusted in memory" to "never sees the project".
+6. **The Monk as a Shade Agent.** Inference already runs in a TEE; next, run the orchestrator in a TEE too, with an MPC-derived key, and have `settle_battle` accept only a caller with a registered attestation, so the whole judge is verifiable, not just the model.
+7. **Open battle creation.** `create_battle` with a minimum deposit that seeds the prize pool, so anyone can bet their beat is a good seed.
+8. **Mainnet.** After an audit, with real prizes and royalties.
 
 ## Hackathon disclosure
 
