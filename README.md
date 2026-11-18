@@ -2,7 +2,7 @@
 
 **An NFT that is an account.** Make a beat in your browser and mint it on NEAR. The NFT holds its own money, pays royalties up its remix tree, controls its own address on another chain (Chain Signatures) and keeps its source sealed. When it's sold, all of that moves to the buyer, and the contract makes sure the seller can't keep any of it.
 
-<!-- GIF: sequencer → register → gallery cover (docs/demo.gif) -->
+GIF: sequencer → register → gallery cover (docs/demo.gif)
 
 | ▶ [Live app](https://musecure-beats.vercel.app) | 📜 [Contract `musecure-beats-v2.testnet`](https://testnet.nearblocks.io/address/musecure-beats-v2.testnet) | 🎬 Demo video: https://x.com/FavioMontealeg1/status/2121727823857475757?a=tqgwdfJvN2Diaw8QnxU&s=20 |
 |---|---|---|
