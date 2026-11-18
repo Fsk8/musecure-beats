@@ -4,7 +4,7 @@
 
 <!-- GIF: sequencer → register → gallery cover (docs/demo.gif) -->
 
-| ▶ [Live app](https://musecure-beats.vercel.app) | 📜 [Contract `musecure-beats-v2.testnet`](https://testnet.nearblocks.io/address/musecure-beats-v2.testnet) | 🎬 Demo video: _TODO_ |
+| ▶ [Live app](https://musecure-beats.vercel.app) | 📜 [Contract `musecure-beats-v2.testnet`](https://testnet.nearblocks.io/address/musecure-beats-v2.testnet) | 🎬 Demo video: https://x.com/FavioMontealeg1/status/2121727823857475757?a=tqgwdfJvN2Diaw8QnxU&s=20 |
 |---|---|---|
 
 **In 30 seconds:**
